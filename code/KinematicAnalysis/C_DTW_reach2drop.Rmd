@@ -1,0 +1,126 @@
+---
+title: "DynamicTimeWarping"
+author: "Veronica Mandelli"
+date: "11/26/2020"
+output: html_document
+---
+in this markdown DTW will be run on all the entire movement (reach-to-drop)
+
+### load libraries and set paths
+```{r, warning= FALSE, error=FALSE, include=FALSE}
+library(easypackages)
+library(fpc)
+libraries("ggplot2","dtw",'readr')
+codepath = here("code")
+datapath = here('data')
+rawdatapath = here("data","all_data_csv")
+resultpath =  here('result',"all_data")
+cut_csv_path = here("data",'all_data_csv_cutted')
+plotpath = here('plot')
+
+sub_info = read.csv("dataset_bp_ASD_TD_clusters.csv")
+sublist_def =read.csv(file.path(cut_csv_path,'sublist_def.csv')) # change to sub_list TD if you want to run this analysis on the TD
+sublist_def = sublist_def[,c('subID','new_subID')]
+```
+
+### make the subject list
+```{r, warning=FALSE, error=FALSE,include=FALSE}
+sublist_def[,'new_subID']= as.character(sublist_def[,'new_subID'])
+sublist = sublist_def[,'new_subID']
+sublist = sublist[order(sublist)]
+```
+
+# run DTW in loop
+```{r,warning= FALSE, error=FALSE}
+# DTW
+# prepare mat for all subject to store avg allignement 
+ mat_all_subj = as.data.frame(matrix(nrow=length(sublist), ncol=3))
+ colnames(mat_all_subj)= c('SUB_ID','dist','dist_norm')
+ rownames(mat_all_subj)= sublist
+
+## Find the best match with the canonical recursion formula
+
+#run the for loop
+for (k in c(1:length(sublist))){
+    # select the subjectt
+    sub2use = sublist[k]
+    
+    #list the files for the subject
+    names = paste(sub2use,"_*" ,sep="")
+    trpresent = list.files(cut_csv_path,pattern=names)
+    
+    #load the first 10 cut- trials (body parts only)
+    t1 = read_csv(paste(cut_csv_path,'/',trpresent[1], sep=''))[,2:13] #2:13 are columns of body parts
+    t2 = read_csv(paste(cut_csv_path,'/',trpresent[2], sep=''))[,2:13]
+    t3 = read_csv(paste(cut_csv_path,'/',trpresent[3], sep=''))[,2:13]
+    t4 = read_csv(paste(cut_csv_path,'/',trpresent[4], sep=''))[,2:13]
+    t5 = read_csv(paste(cut_csv_path,'/',trpresent[5], sep=''))[,2:13]
+    t6 = read_csv(paste(cut_csv_path,'/',trpresent[6], sep=''))[,2:13] 
+    t7 = read_csv(paste(cut_csv_path,'/',trpresent[7], sep=''))[,2:13]
+    t8 = read_csv(paste(cut_csv_path,'/',trpresent[8], sep=''))[,2:13]
+    t9 = read_csv(paste(cut_csv_path,'/',trpresent[9], sep=''))[,2:13]
+    t10 = read_csv(paste(cut_csv_path,'/',trpresent[10], sep=''))[,2:13]
+    tlist= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+    
+    # prepare matrix to save DTW outputs
+    mat = as.data.frame(matrix(nrow=10, ncol=10))
+    rownames(mat)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+    colnames(mat)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+    mat_norm = as.data.frame(matrix(nrow=10, ncol=10))
+    rownames(mat_norm)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+    colnames(mat_norm)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+   
+    
+    print(paste("start sub",sub2use, sep = ' '))
+     for (i in 1:10){
+            TA= tlist[[i]] # ref time series #TA = t1
+        for (j in 1:10){
+            
+            tryCatch({
+                 
+            TB = tlist[[j]]
+          # TB query and TA ref
+           alignment<-dtw(x = TB,
+                          y = TA, #ref time series
+                          method = "Euclidean",
+                          step.pattern = symmetric2,
+                          window.type = "none",
+                          keep.internals = TRUE,
+                          distance.only = FALSE,
+                          open.end = FALSE,
+                          open.begin = FALSE);
+           mat[j,i]=alignment$distance
+           mat_norm[j,i] = alignment$normalizedDistance
+           
+           
+           #plot
+           #plot(dtw(x = TB,y = TA,
+           #               method = "Euclidean",
+           #               step.pattern = symmetric2,
+           #               window.type = "none",
+           #               keep.internals = FALSE,
+           #               distance.only = FALSE,
+            #              open.end = FALSE,
+           #               open.begin = FALSE) 
+             #   )
+           
+            } , error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+        }
+        #print(paste("finish sub",sub2use, sep = ' ')) 
+     }
+    # summary for mat
+        mat_all_subj[sub2use,'SUB_ID'] = sub2use
+        mat_all_subj[sub2use,'dist'] = mean(mat[lower.tri(mat, diag = FALSE)])#mean(mat_norm[2:5,1])#
+        mat_all_subj[sub2use,'dist_norm'] = mean(mat_norm[lower.tri(mat, diag = FALSE)])#mean(mat_norm[2:5,1])#
+        #print(sub2use)
+        print(mat[,1])
+        
+    name_mat =file.path(resultpath,paste(sub2use,'_mat.csv', sep=''))
+    name_mat_norm = file.path(resultpath,paste(sub2use,'_mat_norm.csv', sep=''))
+    write.csv(mat,name_mat)
+    write.csv(mat_norm,name_mat_norm)
+    
+}
+name_mat_all_subj = file.path(resultpath,'_all_subjects_mat_mean.csv')
+write.csv(mat_all_subj,name_mat_all_subj)
+```

@@ -1,0 +1,195 @@
+---
+title: "cut_time_series"
+author: "Veronica Mandelli"
+date: "12/18/2020"
+output: html_document
+---
+## This script segment the movement into 4 submovement.
+it takes the .csv file written in the previous script (times2cutDP.csv) and it uses the time frames indicated there to cut the intiere movement to define feedback and feedforward phases
+```{r, warning= FALSE, error=FALSE, include=FALSE}
+# load libraries and set paths
+library(easypackages)
+library(fpc)
+library(readxl)
+workdir = ""
+libraries("here","ggplot2","dtw",'readr')
+codepath = file.path(workdir,"code")
+datapath = file.path(workdir,'data')
+rawdatapath = file.path(workdir,"data","all_data_csv")
+filepath = file.path(workdir,"data","all_data_csv_cutted")
+timepointpath = file.path(workdir,'result')
+resultpath =  file.path(workdir,'result')
+cut_csv_path = file.path(workdir,'data','all_data_segmentation')
+
+# subject that have ABC and clusters
+sub_info = read.csv("dataset_bp_ASD_TD_clusters.csv")
+
+# how many good trials for each subject (less that 10 will be excluded!)
+sub_trials = read.csv2(file.path(rawdatapath,'subject_list.csv'))
+
+# which trial is good/bad/missed
+Trial_info =  read.csv2(file.path(rawdatapath,'TrialGoodBad.csv'))
+
+# csv with cutting points (defined in the previous scipt)
+Cutting_info =  read.csv(file.path(timepointpath,'times2cutDP.csv'))
+sublist_def_2use = unique(Cutting_info$sub_id)
+```
+
+### reframe the dataset in a compehensible way
+```{r}
+# change subject names
+sub_trials$Row <- gsub("RF_ASD_", "1",sub_trials$Row)
+sub_trials$Row <- gsub("RF_asd_", "1",sub_trials$Row)
+
+Trial_info$new_subID <- gsub("RF_asd_", "1",Trial_info$subID)
+Trial_info$new_subID <- gsub("RF_ASD_", "1",Trial_info$new_subID)
+```
+
+#uncomment here if you want to run this analysis on TD
+```{r}
+# # change subject names TD
+# sub_trials$Row <- gsub("CT_", "2",sub_trials$Row)
+# sub_trials$Row <- gsub("RFct_", "2",sub_trials$Row)
+# 
+# timetask$Soggetto <- gsub("ct", "2",timetask$Soggetto)
+# timetask$trial <- gsub("p", "",timetask$trial)
+# timetask$trial <- gsub("rova", "",timetask$trial)
+# timetask$trial <-as.numeric(timetask$trial)
+```
+
+# segmenting into 4 submovements
+- it saves 4 .csv for each trials: all the reaching - reaching before DP - reaching after DP - all the dropping 
+- it saves a .csv for those trials whose the velocity or deceleration peaks are not detectable so those are outlier trials and/or subjects (= the subject won't have 10 segments)
+```{r,warning=FALSE, error=FALSE}
+
+# preapare a matrix to save those subject without good segmentation (no peaks defined)
+sub_no_peaks= as.data.frame(matrix(nrow =0, ncol= 4))
+
+for (i in sublist_def_2use){
+    #select the subject 
+    subid= i 
+    #subid =  "1077"   
+    
+    # select Cutting_info only for the current subject
+    sub_timetask = subset(Cutting_info,Cutting_info$sub_id== subid)
+    print(subid)
+    print('list of Trials for which cutting frames are present')
+    sub_timetask[,'trial']
+    trial_list = as.numeric(sub_timetask$trial)
+    
+    
+    #get all the possible files for the subid (already cutted: exlcude before and after the real task)
+    names = paste(subid,"_*" ,sep="")
+    trpresent = list.files(filepath,pattern=names)
+    trial2take = trial_list
+    
+    #select the first 10 good trial for the subject from the csv
+    #select the first 10 good trial for the subject from the csv
+    t1 = read_csv(paste(filepath,'/',trpresent[1], sep=''))[,2:13] #2:13 are columns of body parts
+    t2 = read_csv(paste(filepath,'/',trpresent[2], sep=''))[,2:13]
+    t3 = read_csv(paste(filepath,'/',trpresent[3], sep=''))[,2:13]
+    t4 = read_csv(paste(filepath,'/',trpresent[4], sep=''))[,2:13]
+    t5 = read_csv(paste(filepath,'/',trpresent[5], sep=''))[,2:13]
+    t6 = read_csv(paste(filepath,'/',trpresent[6], sep=''))[,2:13] 
+    t7 = read_csv(paste(filepath,'/',trpresent[7], sep=''))[,2:13]
+    t8 = read_csv(paste(filepath,'/',trpresent[8], sep=''))[,2:13]
+    t9 = read_csv(paste(filepath,'/',trpresent[9], sep=''))[,2:13]
+    t10 = read_csv(paste(filepath,'/',trpresent[10], sep=''))[,2:13]
+    tlist= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+    
+    
+    
+    #loop on all trials (1:10)
+    A = c()
+    B = c()
+    for (k in 1:10){
+        timeseries2use = tlist[[k]]
+        trialname = trial_list[k]
+        if (colnames(timeseries2use)[1]=="X_45metDx"){
+            col2plot = "X_PolsoMedDx"
+        }else{col2plot = "X_PolsoMedSn"}
+        
+        #cut time series!!!
+        #define new trial order (to avoid changing in the posistion of trial order)
+        if (trialname<10){new_k = paste("0",trialname,sep='')
+        }else if (trialname>=10){new_k = trialname}
+        
+        
+        # define TimeFrame from the previous .csv
+        frame_onset1 =  1
+        frame_DP_reach = sub_timetask[sub_timetask$trial==trialname,"p_dec_1"] # deceleration peak!!!
+        frame_end1 = sub_timetask[sub_timetask$trial==trialname,"end_1"]
+        frame_start_drop = sub_timetask[sub_timetask$trial==trialname,"start_2"]
+        frame_DP_drop = sub_timetask[sub_timetask$trial==trialname,"p_dec_2"]
+        frame_end = nrow(timeseries2use)
+        A[k] = frame_DP_reach/frame_end1
+        B[k] = (frame_DP_drop-frame_start_drop)/(frame_end-frame_start_drop)
+        
+        # 1st movement REACH
+        new_timeserie_REACH = timeseries2use[frame_onset1:frame_end1,]
+        new_timeserie_REACH$timeframe = c(frame_onset1:frame_end1)
+        # save it
+        # reach complete
+        reach_all = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_REACH.csv',sep=""))
+        write.csv(new_timeserie_REACH,reach_all)
+        
+        # if there is no DP in the reaching or it = or > to the end of the reaching phase,
+        # the trial_reaching phase is considered invalid and saved only within the 1st part 
+        if (is.na(frame_DP_reach) | frame_DP_reach >= frame_end1){
+            print(paste(subid,trialname, 'has no DP in the REACH movement or it overalp with the end of the movement'))
+            # save it in the csv for 'outlier'
+            sub_no_peaks_ = c(subid,'reach',trialname,new_k)
+            sub_no_peaks = rbind(sub_no_peaks,sub_no_peaks_)
+            #if the peak is defined cut the time series before and after it
+        }else { new_timeserie_1st_beforeDP =  timeseries2use[frame_onset1:frame_DP_reach,]
+        new_timeserie_1st_beforeDP$timeframe = c(frame_onset1:frame_DP_reach)
+        new_timeserie_1st_afterDP = timeseries2use[(1+frame_DP_reach):frame_end1,]
+        new_timeserie_1st_afterDP$timeframe = c((1+frame_DP_reach):frame_end1)
+        # saving
+        # define the new names for saving
+        new_name1_before = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_cut_1st_beforeDP.csv',sep=""))
+        new_name1_afer = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_cut_1st_afterDP.csv',sep=""))
+        #reach - before DP
+        write.csv(new_timeserie_1st_beforeDP,new_name1_before)
+        #reach - after DP
+        write.csv(new_timeserie_1st_afterDP,new_name1_afer)
+        }
+        
+        
+        # 2nd movement DROP
+        new_timeserie_DROP = timeseries2use[frame_start_drop:frame_end,]
+        new_timeserie_DROP$timeframe = c(frame_start_drop:frame_end)
+        # save it 
+        # drop complete
+        drop_all = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_DROP.csv',sep=""))
+        write.csv(new_timeserie_DROP,drop_all)
+        
+        # if there is no DP in the reaching or it = to the end of the reaching phase, 
+        # the trial_reaching phase is considered invalid and saved only within the 2nd part 
+        if (is.na(frame_DP_drop) | frame_DP_drop >= frame_end){
+            print(paste(subid,trialname, 'has no DP in the DROP movement'))
+            #if the peak is defined cut the time series before and after it
+        }else { new_timeserie_2nd_beforeDP =  timeseries2use[frame_start_drop:frame_DP_drop,]
+        new_timeserie_2nd_beforeDP$timeframe = c(frame_start_drop:frame_DP_drop)
+        new_timeserie_2nd_afterDP = timeseries2use[(1+frame_DP_drop):frame_end,]
+        new_timeserie_2nd_afterDP$timeframe = c((1+frame_DP_drop):frame_end)
+        # saving 
+        # define the new names for saving
+        new_name2_before = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_cut_2nd_beforeDP.csv',sep=""))
+        new_name2_after = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_cut_2nd_afterDP.csv',sep=""))
+        #drop - before dp
+        write.csv(new_timeserie_2nd_beforeDP,new_name2_before)
+        #drop - after dp
+        write.csv(new_timeserie_2nd_afterDP,new_name2_after)
+        }
+        
+    }
+    mat_asrat = rbind(mat_asrat, A)
+    mat_asrat_drop = rbind(mat_asrat_drop, B)
+}
+mat_asrat$subid = c("a",sublist_def_2use)
+write.csv(mat_asrat,file.path(resultpath,'assimetryratio_reach.csv'))
+mat_asrat_drop$subid = c("a",sublist_def_2use)         
+write.csv(mat_asrat_drop,file.path(resultpath,'asimmetryration_drop.csv'))
+write.csv(sub_no_peaks,file.path(resultpath,'subject_nopeaks.csv'))
+```

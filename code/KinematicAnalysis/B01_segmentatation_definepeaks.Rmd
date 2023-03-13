@@ -1,0 +1,268 @@
+---
+title: "New_DP_finder"
+author: "Veronica Mandelli"
+date: "11/20/2022"
+output: html_document
+---
+this script define peak of velocity and of acceleration of each trial's time series to later cut them into feedforward and feedback phases
+
+# load libraries and set paths
+```{r}
+library(easypackages)
+library(fpc)
+library(readxl)
+workdir = ""
+libraries("ggplot2","dtw",'readr','patchwork', 'quantmod')
+codepath = file.path(workdir,"code")
+datapath = file.path(workdir,'data')
+rawdatapath = file.path(workdir,"data","all_data_csv")
+resultpath =  file.path(workdir,'result',"all_data")
+cut_csv_path = file.path(workdir,"data",'all_data_csv_cutted')
+plotpath = file.path(workdir,'plot')
+plot_path_velocity_new = file.path(workdir,'plot','velocity_FINAL')
+res_vel_path = file.path(workdir,'result','velocity_acceleration')
+resultimetpath = file.path(workdir,'result')
+
+# subject that have ABC and clusters
+sub_info = read.csv("/Users/vmandelli/Google Drive/PHD/projects/motorNDAR/results/FINAL/dataset_bp_ASD_TD_clusters.csv")
+
+# how many good trials for each subject (less that 10 will be excluded!)
+sub_trials = read.csv2(file.path(rawdatapath,'subject_list.csv'))
+
+# which trial is good/bad/missed
+Trial_info =  read.csv2(file.path(rawdatapath,'TrialGoodBad.csv'))
+
+# excel with timeframe to cut (start of the entire movement, end of the entire movement, end of reach, start of drop)
+timetask <-read_excel(file.path(datapath,'timetask_alldata.xlsx'))
+# how many subjects
+length(unique(timetask$Soggetto))
+
+
+##selcet only subjects that have also the MABC2 (So those that we have cluters labele)
+sublist_def =read.csv(file.path(cut_csv_path,'sublist_def.csv'))
+sublist_def = sublist_def$new_subID
+outliers = c("1042",'1047','1088')
+sublist_def=sublist_def[!sublist_def %in% outliers]
+```
+
+### reframe the dataset in a compehensible way
+```{r}
+# change subject names
+sub_trials$Row <- gsub("RF_ASD_", "1",sub_trials$Row)
+sub_trials$Row <- gsub("RF_asd_", "1",sub_trials$Row)
+
+timetask$Soggetto <- gsub("asd", "1",timetask$Soggetto)
+timetask$trial <- gsub("p", "",timetask$trial)
+timetask$trial <-as.numeric(timetask$trial)
+
+Trial_info$new_subID <- gsub("RF_asd_", "1",Trial_info$subID)
+Trial_info$new_subID <- gsub("RF_ASD_", "1",Trial_info$new_subID)
+```
+#### uncomment here if you would like to run this analysis on TD 
+```{r}
+# # change subject names TD
+# sub_trials$Row <- gsub("CT_", "2",sub_trials$Row)
+# sub_trials$Row <- gsub("RFct_", "2",sub_trials$Row)
+# 
+# timetask$Soggetto <- gsub("ct", "2",timetask$Soggetto)
+# timetask$trial <- gsub("p", "",timetask$trial)
+# timetask$trial <- gsub("rova", "",timetask$trial)
+# timetask$trial <-as.numeric(timetask$trial)
+# 
+# Trial_info$new_subID <- gsub("RFCT_", "2",Trial_info$subID)
+# Trial_info$new_subID <- gsub("RFct_", "2",Trial_info$new_subID)
+```
+
+# select timetask (dataframe where time frame where manually inserted )
+```{r}
+col2use = c("Soggetto", "trial","LatoCastello","ManoPresa","Frame_Onset","Frame_Tocco","Frame_Onset2","Frame_End_Reaching2","FrameRilascio")
+timetask = timetask[,col2use]
+timetask = timetask[!duplicated(timetask),]
+# select timeframes of subjects in 'sublist_def'
+timetask_only10 = timetask[timetask$Soggetto %in% sublist_def,]
+
+# work on Trial_info (table from matlab, that told us which trials has 3D data preprocessed)
+Trial_info = Trial_info[Trial_info$new_subID %in% sublist_def,]
+Trial_info = Trial_info[order(Trial_info$new_subID),]
+
+```
+
+# plot velocity path and compute the peaks
+- velocity (max peaks velocity in the reaching and the in the dropping phases)
+- deceleration peaks (the 1st peak after the velocity peaks, evetything that haoppen later is a sort of online correction (feedback processes))
+it saves a plot of the velocity profiles of the wrist and the corresponding peaks.
+
+```{r,error=FALSE,warning=FALSE}
+sublist = sublist_def
+library(dplyr)
+plot_path_velocity_total= file.path(workdir,'plot','velocity_total')
+
+exp_subj = c() 
+
+# define the final subject list
+sublist_ = sublist [!sublist %in% exp_subj]
+
+# prepare a matrix to save the TimeFrames corresponding to the peaks and segmentation points
+values2save = as.data.frame(matrix(ncol=8,nrow=0))
+colnames(values2save) = c('sub_id','trial','p_vel_1','p_dec_1','end_1','start_2','p_vel_2','p_dec_2')
+
+# start a for loop on all the subjects
+for (k in c(1:length(sublist_))){
+    # select the subject
+    sub2use = sublist_[k]
+    print(sub2use)
+    # list the files for the subject (files altready cleaned (everything recorded before and after the real movemebt have been cutted out))
+    names = paste(sub2use,"_*" ,sep="")
+    trpresent = list.files(cut_csv_path,pattern=names)
+    sub_timetask = subset(timetask_only10,timetask_only10$Soggetto == sub2use)
+    
+    
+    #select the first 10 good trial for the subject from the csv
+    t1 = read_csv(paste(cut_csv_path,'/',trpresent[1], sep=''))[,2:13] #2:13 are columns of body parts
+    t2 = read_csv(paste(cut_csv_path,'/',trpresent[2], sep=''))[,2:13]
+    t3 = read_csv(paste(cut_csv_path,'/',trpresent[3], sep=''))[,2:13]
+    t4 = read_csv(paste(cut_csv_path,'/',trpresent[4], sep=''))[,2:13]
+    t5 = read_csv(paste(cut_csv_path,'/',trpresent[5], sep=''))[,2:13]
+    t6 = read_csv(paste(cut_csv_path,'/',trpresent[6], sep=''))[,2:13] 
+    t7 = read_csv(paste(cut_csv_path,'/',trpresent[7], sep=''))[,2:13]
+    t8 = read_csv(paste(cut_csv_path,'/',trpresent[8], sep=''))[,2:13]
+    t9 = read_csv(paste(cut_csv_path,'/',trpresent[9], sep=''))[,2:13]
+    t10 = read_csv(paste(cut_csv_path,'/',trpresent[10], sep=''))[,2:13]
+    tlist= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+    
+    o=0
+    trial2use=c()
+    # select the  trails' number based on subject's specific trial list (not all the good trials are from 0 t 9, some start from 1, and some middle trials are missed) --> this is necessary to use the timetask to select the frames of: end of reaching and start of dropping, which are manually defined
+    for(whichtrial in trpresent){
+        o=o+1
+        splitted = strsplit(whichtrial,split='_')
+        trial2use[o]=splitted[[1]][3]
+    }
+    trial2use=as.numeric(trial2use)
+    
+    # select if the wrist (polso) used is SX or DX
+    if (colnames(t1)[1]=="X_45metDx"){
+        col2plot = c("X_PolsoMedDx","Y_PolsoMedDx","Z_PolsoMedDx")
+    }else{col2plot = c("X_PolsoMedSn","Y_PolsoMedSn","Z_PolsoMedSn")}
+    
+    #initialize index and plot list
+    plt_all=list()
+    tr=0
+    
+    # loop on trials
+    for (trial in tlist){
+        tr = tr+1
+        # initialize an empty matrix  to compute all the time series (velocity/acceleration)
+        mat2save= as.data.frame(matrix(ncol=1,nrow=nrow(trial))) ### -1
+        colnames(mat2save)= c('velocity')
+        
+        for (time_frame in 2: nrow(trial)){
+            mat2save[time_frame,'timeframe']=time_frame
+            # computing the istantaneous velocity 
+            mat2save[time_frame,'velocity'] = sqrt((trial[time_frame,col2plot[1]]- trial[time_frame-1,col2plot[1]])^2 + (trial[time_frame,col2plot[2]]- trial[time_frame-1,col2plot[2]])^2+(trial[time_frame,col2plot[3]]- trial[time_frame-1,col2plot[3]])^2)/16.66
+        }
+        #add velocity = 0 in time frame 1
+        mat2save[1,"velocity"]=0
+        
+        # find the acceleration ( the difference ad velocity at T - velocity at T-1)
+        for (n in 2:length(mat2save$velocity)){
+            mat2save[n,'acceleration']= (mat2save[n,'velocity']-mat2save[n-1,'velocity'])/16.66
+        }
+        
+        # fill the 0 in the time frame -acceleration at 
+        mat2save[1,"timeframe"]=1
+        mat2save[1,"acceleration"]=0
+
+        # find the peaks
+        # velocity
+        x= mat2save[,'velocity']
+        peaks_vel = findPeaks(x, thresh=0)-1 # -1 because the function finds the timepoint after the peaks
+        valley_vel = findValleys(x)-1
+        # acceleration
+        x= mat2save[,'acceleration']
+        peaks_ac = findPeaks(x, thresh=0)-1
+        # deceleration
+        x= mat2save[,'acceleration']
+        peaks_dec = findValleys(x)-1
+        
+        
+        #  REACH find the peaks for the 1st movement 
+        # define the TimeFrame of the touch (which represent the end of the reach)
+        touch_frame = as.numeric(sub_timetask[sub_timetask$trial== as.numeric(trial2use[tr]),'Frame_Tocco']) - as.numeric(sub_timetask[sub_timetask$trial== as.numeric(trial2use[tr]),'Frame_Onset'])
+        
+        # peak velocity 
+        peaks_vel_real = mat2save[mat2save$velocity == max(mat2save[mat2save$timeframe %in% peaks_vel[peaks_vel<as.numeric(touch_frame)],'velocity']),'timeframe']
+        
+        # Deceleration peak (real_dec) right after the peaks_vel_real
+        real_dec_ = peaks_dec[peaks_dec>peaks_vel_real+1][1]   
+        
+        # DROP find the peaks for the 2nd movement
+        # define the TimeFrame of the drop onset
+        start_drp_frame =  as.numeric(sub_timetask[sub_timetask$trial== as.numeric(trial2use[tr]),'Frame_Onset2'])-as.numeric(sub_timetask[sub_timetask$trial== as.numeric(trial2use[tr]),'Frame_Onset']) 
+        
+        # peak velocity 
+        peaks_vel_real_2 = mat2save[mat2save$velocity == max(mat2save[mat2save$timeframe %in% peaks_vel[peaks_vel>as.numeric(start_drp_frame)],'velocity']),'timeframe']
+        
+        # peak of decelertion (real_dec_2) right after the peaks_vel_real_2
+        real_dec_2 = peaks_dec[peaks_dec>(peaks_vel_real_2+1) ][1]  
+        
+        #plot the time series 
+        p = ggplot(mat2save, aes_string(x='timeframe', y='velocity')) +geom_line() +
+            geom_vline(xintercept = touch_frame , color = "black", size=1.5) +
+            geom_vline(xintercept = start_drp_frame , color = "black", size=1.5) +
+            geom_vline(xintercept = peaks_vel_real, color = "blue", size=1.5) +
+            geom_vline(xintercept = real_dec_ , linetype="dotted",color = "blue", size=1.5)+
+            geom_vline(xintercept = peaks_vel_real_2, color = "red", size=1.5) +
+            geom_vline(xintercept = real_dec_2 , linetype="dotted",color = "red", size=1.5) +
+            xlab(as.character(tr))
+        plt_all[[tr]] = p
+
+        # eventually plot the acceleration profiles
+        # p_ac = ggplot(mat2save, aes_string(x='timeframe', y='acceleration')) +geom_line() 
+        
+        #save the matrix of cutting timeframes
+        values2save_ = as.data.frame(matrix(ncol=8,nrow=1))
+        colnames(values2save_) = c('sub_id','trial','p_vel_1',
+                                   'p_dec_1','end_1','start_2',
+                                   'p_vel_2','p_dec_2')
+        if (length(real_dec_)==0){
+            real_dec_ = NaN
+        }
+        if (length(real_dec_2)==0){
+            peaks_ac_real = NaN
+        }
+        values2save_[1,] = c(sub2use,trial2use[tr],peaks_vel_real,real_dec_,
+                             touch_frame,start_drp_frame,
+                             peaks_vel_real_2,real_dec_2)
+        
+        
+        values2save = rbind(values2save,values2save_)
+        # save each subject matrix
+        write.csv(mat2save,file.path(res_vel_path,paste(sub2use,'_',tr,'vel_acc.csv')))
+    }
+    #bind plot of all trials to gether in a single page
+    library(gridExtra)
+    g = grid.arrange(plt_all[[1]],
+                     plt_all[[2]],
+                     plt_all[[3]],
+                     plt_all[[4]],
+                     plt_all[[5]],
+                     plt_all[[6]],
+                     plt_all[[7]],
+                     plt_all[[8]],
+                     plt_all[[9]],
+                     plt_all[[10]],nrow=10
+    )
+    
+    plt_subject=plt_all[[1]]+plt_all[[2]]+plt_all[[3]]+plt_all[[4]]+plt_all[[5]]+
+        plt_all[[6]]+plt_all[[7]]+ plt_all[[8]]+ plt_all[[9]]+plt_all[[10]] + plot_layout(nrow = 10)
+    
+    #save the plot
+    ggsave(file.path(plot_path_velocity_new,paste('sub_',sub2use,'_short.pdf',sep='')),g,width=3,height = 10)
+}
+
+#save total matrix for the subjetc
+write_csv(values2save,file.path(resultimetpath,'times2cutDP.csv'))
+```
+
+## end

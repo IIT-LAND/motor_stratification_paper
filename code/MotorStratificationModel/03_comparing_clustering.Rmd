@@ -1,0 +1,374 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Veronica Mandelli
+date: 18.03.2021
+---
+In this script we produce visualization (and statistics) for describing the ASD motor clusters comparing them to the TD group
+
+```{r pressure, results='hide',warning=FALSE, message=FALSE}
+# load librayes
+library(easypackages)
+#library(fpc)
+libraries("here","ggplot2","psych","gplots",'car',"ramify","NbClust","cluster","readxl","plot3D","beeswarm",'gridExtra',"ggplot",'openxlsx')
+# set paths
+codepath = here("code")
+subjectiddatapath = here ("data","SUBJECTID")
+plotpath = here("plots","FINAL")
+resultpath = here("results","FINAL")
+code_nosharepath = here('code_noshare')
+reval_result_data_path = here("results","reval_90_server")
+tidydatapath = here("data","tidy")
+
+#useful fucntions
+source(file.path(code_nosharepath,"cohens_d.R"))
+source(file.path(code_nosharepath,"Plot_3d.R"))
+source(file.path(code_nosharepath,"Gplot.R"))
+source(file.path(code_nosharepath,"other_features.R"))
+source(file.path(code_nosharepath,"new_column_4clust.R"))
+
+
+color = c("#FF9933","#3399CC","#009900","#ff0000","#000000")
+```
+
+### import clusters label from reval + TD dataset
+```{r, warning=FALSE, message=FALSE}
+#import labels
+trts_dataset = read.csv(file.path (reval_result_data_path,'reval_results_90.csv'),header = TRUE, stringsAsFactors = FALSE)
+#change cols names
+colnames(trts_dataset)[which(names(trts_dataset) == "subjectkey")] <- "subject_id"
+
+#merge labels with variables DB
+dataset_complete_asd_td = read.csv(file.path(tidydatapath,"dataset_complete_asd_td_ndar_bp.csv"),header = TRUE, stringsAsFactors = FALSE)  
+
+# merge the data with clusters ASD only
+merged_dataset_ASD = merge(trts_dataset, subset(dataset_complete_asd_td,dataset_complete_asd_td$target=='ASD') ,by = "subject_id")
+
+# ADD TD
+dataset_td = subset(dataset_complete_asd_td,dataset_complete_asd_td$target=='TD') 
+dataset_td$cluster = "TD"
+dataset_td$TR_TS = "TD"
+merged_dataset_ASD_TD = rbind(merged_dataset_ASD,dataset_td)
+```
+
+# manually change name to the clusters
+```{r}
+clust2use = "cluster"
+# subset data to learn cluster order from the train
+data2use_tr= subset(merged_dataset_ASD_TD,merged_dataset_ASD_TD$TR_TS=="TR")
+data_tr = data2use_tr
+# learn the order  from the train (they are homolougous (as python default))
+avg_tot = (tapply(data2use_tr$mabc2_manualdexterity_std, data2use_tr[,clust2use], mean))
+group_order = rownames(as.data.frame(sort(avg_tot)))
+#print(group_order)
+
+#change the order in train
+data_2b_corrected = subset(merged_dataset_ASD_TD,merged_dataset_ASD_TD$TR_TS %in% c("TS","TR"))
+  for (j in (1:nrow(data_2b_corrected))) {
+    if (data_2b_corrected[j, clust2use]== group_order[1]){
+      data_2b_corrected[j,paste("new_",clust2use,sep="")] = "low"
+    }
+    else if (data_2b_corrected[j, clust2use]==group_order[2]){
+      data_2b_corrected[j,paste("new_",clust2use,sep="")] = "high"
+    }
+}
+
+dataset_corr = data_2b_corrected
+
+# add the DB
+dataset_td = subset(merged_dataset_ASD_TD,merged_dataset_ASD_TD$target=='TD') 
+dataset_td[,paste("new_",clust2use,sep="")] = "TD"
+complete_dataset_corr = rbind(dataset_corr,dataset_td)
+
+```
+
+### plot cluster description
+```{r}
+source(file.path(code_nosharepath,"Gplot.R"))
+new_clust2use = "new_cluster" 
+what_group = "TR"
+color = c( "#72aeb6","#2f70a1","#f0be3d")
+data2use= subset(dataset_corr,dataset_corr$TR_TS==what_group)
+tr_plot = Gplot(data2use,color,new_clust2use,what_group)
+
+what_group = "TS"
+data2use= subset(dataset_corr,dataset_corr$TR_TS==what_group)
+ts_plot = Gplot(data2use,color,new_clust2use,what_group)
+
+g =  grid.arrange(tr_plot[[1]],ts_plot[[1]],tr_plot[[2]],ts_plot[[2]],tr_plot[[3]],ts_plot[[3]],tr_plot[[4]],ts_plot[[4]], nrow = 4)
+#ggsave(file.path(plotpath, "cluster_description_TR_TS_vertical.png"), g,width = 4,height = 8)
+```
+
+### statistics to describe MABC2 features in the clusters
+```{r}
+#TRAIN
+#cohens'd
+data2use= subset(dataset_corr,dataset_corr$TR_TS=='TR')
+cohens_d_mat = as.data.frame(matrix(ncol=1,nrow=4))
+rownames(cohens_d_mat) = c('mabc2_manualdexterity_std','mabc2_aimingcatching_std', 'mabc2_balance_std', 'mabc2_total_std')
+for (col in c('mabc2_manualdexterity_std','mabc2_aimingcatching_std', 'mabc2_balance_std', 'mabc2_total_std')){
+CohenD <- cohens_d(data2use[data2use$new_cluster=='high',col],
+                       data2use[data2use$new_cluster=='low',col], 
+                       SIGN=FALSE)
+   
+      cohens_d_mat[col,1] = CohenD}
+
+#write.csv(cohens_d_mat, file.path(resultpath,'cohensd_cluster_TR.csv'))
+
+#TEST
+#cohens'd
+data2use= subset(dataset_corr,dataset_corr$TR_TS=='TS')
+cohens_d_mat = as.data.frame(matrix(ncol=1,nrow=4))
+rownames(cohens_d_mat) = c('mabc2_manualdexterity_std','mabc2_aimingcatching_std', 'mabc2_balance_std', 'mabc2_total_std')
+for (col in c('mabc2_manualdexterity_std','mabc2_aimingcatching_std', 'mabc2_balance_std', 'mabc2_total_std')){
+CohenD <- cohens_d(data2use[data2use$new_cluster=='high',col],
+                       data2use[data2use$new_cluster=='low',col], 
+                       SIGN=FALSE)
+   
+      cohens_d_mat[col,1] = CohenD}
+
+#write.csv(cohens_d_mat, file.path(resultpath,'cohensd_cluster_TS.csv'))
+
+# Percentage table of clusters number
+tabperc = table(dataset_corr$new_cluster)/nrow(dataset_corr)*100
+#write.csv(tabperc, file.path(resultpath,'clust_perc.csv'))
+```
+
+
+### load the IRCCS-MEDEA demographic dataset, which contains non-motor characteristics of the subject. Comparre them in the clusters
+```{r}
+# load BP demo data to get info about other features and merged it with the clusters
+BP_demo = read.csv(file.path (tidydatapath,'DB_BP_demo_renamed.csv'),header = TRUE, stringsAsFactors = FALSE)
+col2use=c("age_years","IQ" ,"SRS_TotalTScores","ADOS_TotalScore","ADOS_SocialAffect", "ADOS_RestrictedRepetitiveBehavior",'ID', "SRS_SocialAwareness","SRS_SocialCognition","SRS_SocialCommunication","SRS_SocialMotivation","SRS_RRB")
+title_list = c('AGE','IQ','SRS','ADOS CSS TOTAL','ADOS CSS SA', 'ADOS CSS RRB', "SRS_SocialAwareness","SRS_SocialCognitio","SRS_SocialCommunication","SRS_SocialMotivation","SRS_RRB","early motor dev","early lang dev")          
+data2plot_ = merge(dataset_corr[dataset_corr$study_id=="BP",],BP_demo[,col2use],by.x ="subject_id",by.y="ID")
+color2use = c("#FF9933","#3399CC","#009900","#ff0000","#000000")
+
+# load database with information about the early development
+early_dev_BP = read_excel(file.path(tidydatapath,"SupplementaryData_EarlyMotor-Language.xlsx"))
+
+# change subjectid format 
+early_dev_BP$ID <- gsub("RFASD_", "1",early_dev_BP$ID)
+early_dev_BP$ID <- gsub("RFasd_", "1",early_dev_BP$ID)
+# select columns
+early_dev_BP=early_dev_BP[,c("ID","mot_early","lang_early")]
+
+# merge 
+data2plot = merge(early_dev_BP,data2plot_, by.x="ID",by.y = 'subject_id')
+#var_list = c("mot_early","lang_early")
+
+
+# define columns to plot 
+cols2plot =  c("age_years","IQ" ,"SRS_TotalTScores","ADOS_TotalScore","ADOS_SocialAffect", "ADOS_RestrictedRepetitiveBehavior","SRS_SocialAwareness","SRS_SocialCognition","SRS_SocialCommunication","SRS_SocialMotivation","SRS_RRB","mot_early","lang_early")
+p_list=c()
+
+# make columns in the format required to be plotted
+data2plot$new_cluster<- factor( data2plot$new_cluster,levels = c('high','low'));
+data2plot$sex <- factor( data2plot$sex,levels = c("F","M"))
+
+# prepare table to save statistic
+other_feat_mat= as.data.frame(matrix(nrow=length(cols2plot),ncol = 7))
+rownames(other_feat_mat) = cols2plot
+colnames(other_feat_mat) = c("normality","levene","test_type","t","p","df","CohenD")
+
+# run plots and stats in loop
+for (i in 1:length(cols2plot)){
+  
+  var2use = cols2plot[i]
+  print(var2use)
+  print(sum(!is.na(data2plot[,var2use])))
+  #plot
+  p = ggplot(data =data2plot ,aes_string(x = 'new_cluster', y = var2use, color='new_cluster') )
+  p = p + geom_jitter() + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA)
+  p = p + scale_colour_manual(values = color)
+  p = p + guides(colour = FALSE)
+  p = p + xlab("") + ylab('')
+  p = p + ggtitle(title_list[i])
+  p = p + theme(plot.title = element_text(size = 7, face = "bold",hjust = 0.5))
+  p = p + theme(axis.text.x = element_text(face="bold", size=7))
+  p = p + theme(axis.text.y = element_text(face="bold", size=7))
+  
+  print(p)
+  #ggsave(file.path(plotpath, paste("othfeat_",var2use,".png",sep='')), p,width = 2,height = 2)
+  p_list[[i]]= p
+  
+  #statistics
+  # t-test requirments
+  
+  # Compute Shapiro wilk test by goups --> normality
+  resp_normality = shapiro.test(data2plot[,var2use])
+  #resp_normality
+  other_feat_mat[var2use,"normality"] = resp_normality$p.value
+  
+  # Equality of variance
+  
+  # Levene's test with one independent variable
+  df2<-data2plot[complete.cases(data2plot[,c(var2use,'new_cluster')]),]
+  form2use = as.formula(sprintf("%s ~ new_cluster",var2use))
+  
+  resp_levene = leveneTest(form2use, data = df2)
+  #resp_levene
+  other_feat_mat[var2use,"levene"] = resp_levene$`Pr(>F)`[1]
+  
+  if (  resp_normality$p.value >0.05 && resp_levene$`Pr(>F)`>0.05 ){
+    #  paramentric: t-test
+    x = subset(data2plot, data2plot$"new_cluster" =="high")[,var2use]
+    y = subset(data2plot, data2plot$"new_cluster" =="low")[,var2use]
+    res_t = t.test(x,y)
+    #print(res_t)
+    other_feat_mat[var2use,"test_type"] = 't-test'
+    other_feat_mat[var2use,"t"] = res_t$statistic
+    other_feat_mat[var2use,"p"] = res_t$p.value
+    other_feat_mat[var2use,"df"] = res_t$parameter
+  }
+  else{# non paramentric:
+    x = subset(data2plot, data2plot$"new_cluster" =="high")[,var2use]
+    y = subset(data2plot, data2plot$"new_cluster" =="low")[,var2use]
+    res_w = wilcox.test(x, y, alternative = "two.sided")
+    
+    other_feat_mat[var2use,"test_type"] = 'wilcox'
+    other_feat_mat[var2use,"t"] = res_w$statistic
+    other_feat_mat[var2use,"p"] = res_w$p.value
+  }
+  
+  
+  # we also compute the cohens'd to estimate the effect size
+  CohenD <- cohens_d(data2plot[data2plot$new_cluster=='high',var2use],
+                     data2plot[data2plot$new_cluster=='low',var2use], 
+                     SIGN=FALSE)
+  
+  other_feat_mat[var2use,"CohenD"] = CohenD
+  
+}
+
+
+# all plots in a unique figure
+new_grid = grid.arrange(
+  p_list[[1]],p_list[[2]],p_list[[3]],p_list[[4]],p_list[[5]],p_list[[6]],p_list[[12]],p_list[[13]],
+  nrow = 2)
+#ggsave(file.path(plotpath,"other_feat_BP.png"),new_grid,width = 6,height = 4)
+
+# save statistics
+other_feat_mat$variable = rownames(other_feat_mat)
+#write.xlsx(other_feat_mat,file.path(resultpath,'FORCED_other_features_ttest_1102023.xlsx'))
+```
+
+### save IRCCS-MEDEA dataset with clusters labels for the following kinematic analysis
+```{r}
+data_BP = subset(dataset_corr,dataset_corr$study_id=="BP")
+#savingpath_dataset=""
+write.csv(data_BP,file.path(resultpath,"dataset_bp_ASD_TD_clusters.csv"))
+```
+
+### statistics comparing Autism Subtypes (High and Low) with TD and DCD grups
+```{r}
+#require(tidyverse)
+library(rstatix)
+library(ggpubr)
+library(car)
+alldatset = read.csv(file.path(resultpath,"dataset_complete_corrected.csv"),header = TRUE, stringsAsFactors = FALSE)
+alldatset = merge(alldatset, trts_dataset,by= 'subject_id',all.x = TRUE,all.y=TRUE)
+alldatset[alldatset$target=="TD",'cluster']="TD"
+alldatset[alldatset$target=="DCD",'cluster']="DCD"
+alldatset[alldatset$cluster==0,'cluster']="high"
+alldatset[alldatset$cluster==1,'cluster']="low"
+
+
+#anova
+# Compute the analysis of variance
+res.aov <- aov(mabc2_total_std ~ cluster, data = alldatset)
+# Summary of the analysis
+summary(res.aov)
+AIC(res.aov)
+
+
+col2use =  c("mabc2_total_std" )
+all_sub_clust = alldatset
+# prepare table to save statistic
+other_feat_mat= as.data.frame(matrix(nrow=4,ncol = 7))
+rownames(other_feat_mat) = c("high_TD","high_DCD","low_TD","low_DCD")
+colnames(other_feat_mat) = c("normality","levene","test_type","t","p","df","CohenD")
+list_comarison_a = c("high","high","low","low")
+list_comarison_b =c("TD","DCD","TD","DCD")
+row_list = c("high_TD","high_DCD","low_TD","low_DCD")
+# t-test requirments
+for (i in 1:4 ){
+row2use = row_list[i]
+comp2use_a = list_comarison_a[i]
+comp2use_b = list_comarison_b[i]
+
+# t-test requirments
+      all_sub_clust_subset =  subset(all_sub_clust,all_sub_clust$cluster %in% c(comp2use_a,comp2use_b))
+      # Compute Shapiro wilk test by goups --> normality
+      resp_normality = shapiro.test(all_sub_clust_subset[,col2use])
+      #resp_normality
+      other_feat_mat[row2use,"normality"] = resp_normality$p.value
+      
+      # Equality of variance
+      
+      # Levene's test with one independent variable
+      form2use = as.formula(sprintf("%s ~ cluster",col2use))
+      resp_levene = leveneTest(form2use, data = all_sub_clust_subset)
+      #resp_levene
+      other_feat_mat[row2use,"levene"] = resp_levene$`Pr(>F)`[1]
+      
+      if (resp_normality$p.value >0.05 && resp_levene$`Pr(>F)`>0.05 ){
+      #  paramentric: t-test
+      x = subset(all_sub_clust, all_sub_clust$"cluster" ==comp2use_a)[,col2use]
+      y = subset(all_sub_clust, all_sub_clust$"cluster" ==comp2use_b)[,col2use]
+      res_t = t.test(x,y)
+      #print(res_t)
+      other_feat_mat[row2use,"test_type"] = 't-test'
+      other_feat_mat[row2use,"t"] = res_t$statistic
+      other_feat_mat[row2use,"p"] = res_t$p.value
+      other_feat_mat[row2use,"df"] = res_t$parameter
+      }
+      else{# non paramentric:
+      x = subset(all_sub_clust, all_sub_clust$"cluster" ==comp2use_a)[,col2use]
+      y = subset(all_sub_clust, all_sub_clust$"cluster" ==comp2use_b)[,col2use]
+      res_w = wilcox.test(x, y, alternative = "two.sided")
+
+      print(res_t)
+      other_feat_mat[row2use,"test_type"] = 'wilcox'
+      other_feat_mat[row2use,"t"] = res_w$statistic
+      other_feat_mat[row2use,"p"] = res_w$p.value}
+
+      
+      # we also compute the cohens'd to estimate the effect size
+      CohenD <- cohens_d(all_sub_clust[all_sub_clust$cluster==comp2use_a,col2use],
+                       all_sub_clust[all_sub_clust$cluster==comp2use_b,col2use], 
+                       SIGN=FALSE)
+      
+      other_feat_mat[row2use,"CohenD"] = CohenD
+
+}
+other_feat_mat
+
+
+write.csv(other_feat_mat,file.path(resultpath,'ttest_cluster_TDDCD.csv'))
+```
+
+# reval stability plot - plot it in a nicer formtat
+```{r}
+reval = read.csv(file.path(reval_result_data_path,"metric_90.csv"))
+reval_val = reval[,c('cl','stab_val',"stab_val_low")]
+colnames(reval_val)=c("k","value","CI")
+reval_val$cat = 'validation'
+
+reval_tr = reval[,c('cl','stab_tr',"stab_tr_low")]
+colnames(reval_tr)=c("k","value","CI")
+reval_tr$cat = 'train'
+mat = rbind(reval_tr,reval_val)
+colors = c("#cc0000","#000099")
+# spaghetti plot
+gg.spaghetti_x<-ggplot(mat, aes (x = k, y =value , group = cat, color = cat))
+gg.spaghetti_x <-gg.spaghetti_x +geom_line() + geom_point()   +
+                                 geom_errorbar(aes(ymin= value - CI, ymax= value + CI), width = 0.1, size = 0.5) + 
+                                 theme(axis.text.x = element_text(size=15,face="bold"), axis.text.y = element_text(size=15,face="bold")) +
+                                 scale_color_manual(values=colors)
+                                  
+
+ggsave(file.path(plotpath,'REVAL_stability.png'),width = 6,height = 4)
+gg.spaghetti_x
+```
+

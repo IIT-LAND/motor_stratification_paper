@@ -1,0 +1,229 @@
+---
+title: "DynamicTimeWarping"
+author: "Veronica Mandelli"
+date: "11/26/2020"
+output: html_document
+---
+in this markdown DTW will be applyed to feedforward and feedback phases
+### load libraries and set paths
+```{r, warning= FALSE, error=FALSE, include=FALSE}
+library(easypackages)
+library(fpc)
+libraries("ggplot2","dtw",'readr')
+workdir = ""
+codepath = file.path(workdir,"code")
+datapath = file.path(workdir,'data','all_data_segmentation')
+resultpath4save =  file.path(workdir,'result',"segmentation")
+resultpath = file.path(workdir,'result')
+plotpath = file.path(workdir,'plot',"segmentation")
+sub_info = read.csv("dataset_bp_ASD_TD_clusters.csv")
+cut_csv_path = file.path(workdir,'data','all_data_segmentation')
+
+##select only ABC subject
+sublist_def =read.csv(file.path(resultpath,'sublist_def.csv'))
+sublist_def = sublist_def$new_subID
+
+## list of subject to be ecluded as we were able to segment less than 10 trials
+less10sub_mat =  read.csv(file.path(resultpath,'subject_nopeaks.csv')) 
+less10sub = unique(less10sub_mat$X.1038.)
+outliers = c("1042",'1047','1088',less10sub)
+sublist_def=sublist_def[!sublist_def %in% outliers]
+
+
+# uncomment if you want TD
+# sublist_def =read.csv(file.path(subpath,'sublist_def_td.csv'))
+# sublist_def = sublist_def$new_subID
+# less10sub_mat =  read.csv(file.path(resultpath,'subject_nopeaks_td.csv')) 
+# less10sub = unique(less10sub_mat$X.2023.)
+# outliers = c('2001','2020','2051','2045','2097','2100', '2101',less10sub)
+# sublist_def=sublist_def[!sublist_def %in% outliers]
+```
+
+
+# run DTW in loop
+```{r,warning= FALSE, error=FALSE}
+# DTW
+# prepare mat for all subject to store avg allignement 
+ mat_all_subj_mean = as.data.frame(matrix(nrow=length(sublist_def), ncol=7))
+ colnames(mat_all_subj_mean)= c('SUB_ID','dist_norm_beforeDP_1st','dist_norm_afterDP_1st','dist_norm_beforeDP_2nd','dist_norm_afterDP_2nd','dist_norm_REACH','dist_norm_DROP')
+ mat_all_subj_mean$SUB_ID = sublist_def
+ 
+ 
+ mat_all_subj_median = as.data.frame(matrix(nrow=length(sublist_def), ncol=7))
+ colnames(mat_all_subj_median)= c('SUB_ID','dist_norm_beforeDP_1st','dist_norm_afterDP_1st','dist_norm_beforeDP_2nd','dist_norm_afterDP_2nd','dist_norm_REACH','dist_norm_DROP')
+ #rownames(mat_all_subj_median)= sublist_def
+ mat_all_subj_median$SUB_ID = sublist_def
+
+## Find the best match with the canonical recursion formula
+
+
+# loop on subjects
+ for (sub2use in sublist_def){
+   # select the subjectt
+   
+   #sub2use = '1007'
+   #list the files for the subject
+   print(sub2use)
+   names = paste(sub2use,"_*" ,sep="")
+   #trpresent = list.files(cut_csv_path,pattern=names)
+   
+   # load the first 10 cut - trials (body parts only)
+   # REACH before DP
+   trpresent_before_reach = list.files(cut_csv_path,pattern=glob2rx(paste("*",sub2use,'*','1st_beforeDP.csv',sep='')))
+   t1 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[1], sep=''))[,2:13] #2:13 are columns of body parts
+   t2 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[2], sep=''))[,2:13]
+   t3 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[3], sep=''))[,2:13]
+   t4 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[4], sep=''))[,2:13]
+   t5 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[5], sep=''))[,2:13]
+   t6 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[6], sep=''))[,2:13] 
+   t7 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[7], sep=''))[,2:13]
+   t8 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[8], sep=''))[,2:13]
+   t9 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[9], sep=''))[,2:13]
+   t10 = read_csv(paste(cut_csv_path,'/',trpresent_before_reach[10], sep=''))[,2:13]
+   tlist_before_reach= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+   
+   # REACh after DP
+   trpresent_after_reach = list.files(cut_csv_path,pattern=glob2rx(paste("*",sub2use,'*','1st_afterDP.csv',sep='')))
+   t1 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[1], sep=''))[,2:13] #2:13 are columns of body parts
+   t2 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[2], sep=''))[,2:13]
+   t3 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[3], sep=''))[,2:13]
+   t4 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[4], sep=''))[,2:13]
+   t5 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[5], sep=''))[,2:13]
+   t6 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[6], sep=''))[,2:13] 
+   t7 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[7], sep=''))[,2:13]
+   t8 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[8], sep=''))[,2:13]
+   t9 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[9], sep=''))[,2:13]
+   t10 = read_csv(paste(cut_csv_path,'/',trpresent_after_reach[10], sep=''))[,2:13]
+   tlist_after_reach= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+   
+   # DROP before DP
+   trpresent_before_drop = list.files(cut_csv_path,pattern=glob2rx(paste("*",sub2use,'*','2nd_beforeDP.csv',sep='')))
+   t1 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[1], sep=''))[,2:13] #2:13 are columns of body parts
+   t2 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[2], sep=''))[,2:13]
+   t3 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[3], sep=''))[,2:13]
+   t4 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[4], sep=''))[,2:13]
+   t5 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[5], sep=''))[,2:13]
+   t6 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[6], sep=''))[,2:13] 
+   t7 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[7], sep=''))[,2:13]
+   t8 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[8], sep=''))[,2:13]
+   t9 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[9], sep=''))[,2:13]
+   t10 = read_csv(paste(cut_csv_path,'/',trpresent_before_drop[10], sep=''))[,2:13]
+   tlist_before_drop= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+   
+   # DROP after dp
+   trpresent_after_drop = list.files(cut_csv_path,pattern=glob2rx(paste("*",sub2use,'*','2nd_afterDP.csv',sep='')))
+   t1 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[1], sep=''))[,2:13] #2:13 are columns of body parts
+   t2 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[2], sep=''))[,2:13]
+   t3 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[3], sep=''))[,2:13]
+   t4 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[4], sep=''))[,2:13]
+   t5 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[5], sep=''))[,2:13]
+   t6 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[6], sep=''))[,2:13] 
+   t7 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[7], sep=''))[,2:13]
+   t8 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[8], sep=''))[,2:13]
+   t9 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[9], sep=''))[,2:13]
+   t10 = read_csv(paste(cut_csv_path,'/',trpresent_after_drop[10], sep=''))[,2:13]
+   tlist_after_drop= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+   
+   
+   # complete REACH 
+   trpresent_complete_reach = list.files(cut_csv_path,pattern=glob2rx(paste("*",sub2use,'*','REACH.csv',sep='')))
+   t1 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[1], sep=''))[,2:13] #2:13 are columns of body parts
+   t2 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[2], sep=''))[,2:13]
+   t3 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[3], sep=''))[,2:13]
+   t4 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[4], sep=''))[,2:13]
+   t5 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[5], sep=''))[,2:13]
+   t6 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[6], sep=''))[,2:13] 
+   t7 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[7], sep=''))[,2:13]
+   t8 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[8], sep=''))[,2:13]
+   t9 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[9], sep=''))[,2:13]
+   t10 = read_csv(paste(cut_csv_path,'/',trpresent_complete_reach[10], sep=''))[,2:13]
+   tlist_complete_reach= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+   
+   # complete DROP
+   trpresent_complete_drop = list.files(cut_csv_path,pattern=glob2rx(paste("*",sub2use,'*','DROP.csv',sep='')))
+   t1 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[1], sep=''))[,2:13] #2:13 are columns of body parts
+   t2 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[2], sep=''))[,2:13]
+   t3 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[3], sep=''))[,2:13]
+   t4 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[4], sep=''))[,2:13]
+   t5 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[5], sep=''))[,2:13]
+   t6 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[6], sep=''))[,2:13] 
+   t7 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[7], sep=''))[,2:13]
+   t8 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[8], sep=''))[,2:13]
+   t9 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[9], sep=''))[,2:13]
+   t10 = read_csv(paste(cut_csv_path,'/',trpresent_complete_drop[10], sep=''))[,2:13]
+   tlist_complete_drop= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+   
+   
+   
+   print(paste("start sub",sub2use, sep = ' '))
+   
+   #loop on submovements
+   list_of_submovement = list(tlist_before_reach,tlist_after_reach,tlist_before_drop,tlist_after_drop,tlist_complete_reach,tlist_complete_drop)
+   col2filllist = c('dist_norm_beforeDP_1st','dist_norm_afterDP_1st','dist_norm_beforeDP_2nd','dist_norm_afterDP_2nd','dist_norm_REACH','dist_norm_DROP')
+   for (submovement in 1:6){
+     tlist = list_of_submovement[[submovement]]
+     col2fill = col2filllist[submovement]
+     # prepare matrix to save the pairwise DTW 
+     mat = as.data.frame(matrix(nrow=10, ncol=10))
+     rownames(mat)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+     colnames(mat)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+     mat_norm = as.data.frame(matrix(nrow=10, ncol=10))
+     rownames(mat_norm)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+     colnames(mat_norm)= c('t1','t2','t3','t4','t5','t6','t7','t8','t9','t10')
+     
+     for (i in 1:10){
+       TA= tlist[[i]] # ref time series #TA = t1
+       for (j in 1:10){
+         #print(paste('Trial_',j, sep= ""))
+         tryCatch({
+           
+           TB = tlist[[j]]
+           # TB query and TA ref
+           alignment<-dtw(x = TB,
+                          y = TA, #ref time series
+                          method = "Euclidean",
+                          step.pattern = symmetric2,
+                          window.type = "none",
+                          keep.internals = TRUE,
+                          distance.only = FALSE,
+                          open.end = FALSE,
+                          open.begin = FALSE);
+           mat[j,i]=alignment$distance
+           mat_norm[j,i] = alignment$normalizedDistance
+           
+           #plot
+           #plot(dtw(x = TB,y = TA,
+           #               method = "Euclidean",
+           #               step.pattern = symmetric2,
+           #               window.type = "none",
+           #               keep.internals = FALSE,
+           #               distance.only = FALSE,
+           #               open.end = FALSE,
+           #               open.begin = FALSE) 
+           #   )
+           
+         } , error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+       }#close loop a
+       # 
+     } #close loop b
+     
+     # summary for mat
+     # mean
+     mat_all_subj_mean[mat_all_subj_mean$SUB_ID == sub2use,col2fill] = mean(mat_norm[lower.tri(mat_norm, diag = FALSE)])
+     # median
+     mat_all_subj_median[mat_all_subj_median$SUB_ID == sub2use,col2fill] = median(mat_norm[lower.tri(mat_norm, diag = FALSE)])
+     
+     name_mat =file.path(resultpath4save,paste(col2fill,'_',sub2use,'_mat.csv', sep=''))
+     name_mat_norm = file.path(resultpath4save,paste(col2fill,'_',sub2use,'_mat_norm.csv', sep=''))
+     write.csv(mat,name_mat)
+     write.csv(mat_norm,name_mat_norm)
+     
+   }#close submovement
+   print(paste("finish sub",sub2use, sep = ' ')) 
+ }
+ name_mat_all_subj_mean = file.path(resultpath,'_all_subjects_mat_mean_nooutlier_260123.csv')
+ write.csv(mat_all_subj_mean,name_mat_all_subj_mean)
+ name_mat_all_subj_median = file.path(resultpath,'_all_subjects_mat_median_nooutlier_260123.csv')
+ write.csv(mat_all_subj_median,name_mat_all_subj_median)
+```
+

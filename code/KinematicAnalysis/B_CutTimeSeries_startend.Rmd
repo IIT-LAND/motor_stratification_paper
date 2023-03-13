@@ -1,0 +1,194 @@
+---
+title: "cut_time_series"
+author: "Veronica Mandelli"
+date: "12/18/2020"
+output: html_document
+---
+It is often the case that, working with children, the recording start did not match the start of the movement. in this script we are going to cut each trial data and exclude everything that happen before and after the real movement
+
+### load useful dataframe and set paths
+```{r, warning= FALSE, error=FALSE, include=FALSE}
+# load libraries and set paths
+library(easypackages)
+library(fpc)
+library(readxl)
+libraries("here","ggplot2","dtw",'readr')
+codepath = here("code")
+datapath = here('data')
+rawdatapath = here("data","all_data_csv")
+resultpath =  here('result',"all_data")
+cut_csv_path = here("data",'all_data_csv_cutted')
+plotpath = here('plot')
+
+# subject that have ABC and clusters
+sub_info = read.csv("/Users/vmandelli/Google Drive/PHD/projects/motorNDAR/results/FINAL/dataset_bp_ASD_TD_clusters.csv")
+
+# how many good trials for each subject (less that 5 will be excluded!)
+sub_trials = read.csv(file.path(rawdatapath,'subject_list.csv'))
+
+# which trial is good/bad/missed
+Trial_info =  read.csv2(file.path(rawdatapath,'TrialGoodBad.csv'))
+
+# excel with timeframe to cut for each
+timetask <-read_excel(file.path(datapath,'timetask_alldata.xlsx'))
+
+# how many subjects
+length(unique(timetask$Soggetto))
+```
+
+
+### reframe the dataset to omogenize subjects_IDS 
+
+#### ASD
+```{r}
+# change subject names ASD
+sub_trials$Row <- gsub("RF_ASD_", "1",sub_trials$Row)
+sub_trials$Row <- gsub("RF_asd_", "1",sub_trials$Row)
+
+timetask$Soggetto <- gsub("asd", "1",timetask$Soggetto)
+timetask$trial <- gsub("p", "",timetask$trial)
+timetask$trial <-as.numeric(timetask$trial)
+col2use = c("Soggetto", "trial","LatoCastello","ManoPresa","Frame_Onset","Frame_Tocco","Frame_Onset2","Frame_End_Reaching2","FrameRilascio")
+timetask = timetask[,col2use]
+timetask = timetask[!duplicated(timetask),]
+
+Trial_info$new_subID <- gsub("RF_asd_", "1",Trial_info$subID)
+Trial_info$new_subID <- gsub("RF_ASD_", "1",Trial_info$new_subID)
+
+```
+
+#### uncomment here if you would like to run this analysis on TD 
+```{r}
+# # change subject names TD
+# sub_trials$Row <- gsub("CT_", "2",sub_trials$Row)
+# sub_trials$Row <- gsub("RFct_", "2",sub_trials$Row)
+# 
+# timetask$Soggetto <- gsub("ct", "2",timetask$Soggetto)
+# timetask$trial <- gsub("p", "",timetask$trial)
+# timetask$trial <- gsub("rova", "",timetask$trial)
+# timetask$trial <-as.numeric(timetask$trial)
+# col2use = c("Soggetto", "trial","LatoCastello","ManoPresa","Frame_Onset","Frame_Tocco","Frame_Onset2","Frame_End_Reaching2","FrameRilascio")
+# timetask = timetask[,col2use]
+# timetask = timetask[!duplicated(timetask),]
+# 
+# Trial_info$new_subID <- gsub("RFCT_", "2",Trial_info$subID)
+# Trial_info$new_subID <- gsub("RFct_", "2",Trial_info$new_subID)
+```
+
+# check how many trials for each subject
+```{r}
+# subject with more than 5 trials
+ABC_subID= sub_info$subject_id
+timetask_subject_list = unique(timetask$Soggetto)
+for (i in 1: length(timetask_subject_list)){
+    Trial_info[Trial_info$new_subID==timetask_subject_list[i],'sum_cut'] = length(as.numeric(timetask[timetask$Soggetto==timetask_subject_list[i],'trial']$trial))} 
+
+for(n in 4:12) {
+        sublist_5trial = Trial_info[Trial_info$sum_cut>= n,'new_subID']
+        #print(paste("there are",length(sublist_5trial),"subjects with", n, 'trials', sep =" "))
+        ABC_subID = sub_info$subject_id
+        #print(paste("there are",length(ABC_subID),"subjects with", 'ABC data', sep =" "))
+        sub2use = intersect(ABC_subID,sublist_5trial)
+     
+        
+        print(paste("there are",length(sub2use),"subjects with", n, 'good trials and ABC data', sep =" "))
+}
+for (i in 1: length(unique(timetask$Soggetto))){timetask['Soggetto'==unique(timetask$Soggetto)[i],'sum_good'] = sum(Trial_info[i,] == 'good')}
+```
+
+10 trials is the best cut off that allowed us to loose not too many subjects (the majority of those with less that 10 trials are those with no ABC --> no cluster)
+
+# cut csv to exclude the before and after the real movement start
+
+### identify start and end timeframe 
+start and end time frames were identified manually by trained master students, and saved into the "timetask" dataframe
+```{r, warning=FALSE, error=FALSE}
+# subject_id that have more than 10 trials and ABC
+sublist_10trial = Trial_info[Trial_info$sum_cut>= 10,'new_subID']
+sublist_def = intersect(ABC_subID,sublist_10trial)
+
+# select timeframes of subjects in 'sublist_def'
+timetask_only10 = timetask[timetask$Soggetto %in% sublist_def,]
+
+
+# work on Trial_info (table from matlab, that told us which trials has 3D data preprocessed)
+Trial_info = Trial_info[Trial_info$new_subID %in% sublist_def,]
+Trial_info = Trial_info[order(Trial_info$new_subID),]
+
+#save the final list of the subjects that have ABC and 10 Trials
+write.csv(Trial_info[,c('subID','new_subID')],file.path(cut_csv_path,'sublist_def.csv'))
+```
+
+
+```{r,warning=FALSE, error=FALSE}
+# example subject
+# if (sub_timetask[1,'trial']== 1) {}  
+for (i in 1:length(sublist_def)){
+    #select the subjetc 
+    # sub2use = to access the csv file (name that was written in the optoelectronic machine while the movement was recorded)
+    # subid == to access subject code in files present in the workspace 
+    sub2use = Trial_info[i,'subID']
+    subid= Trial_info[i,'new_subID']
+    
+    # select timetask only for the current subject (dataframe that says on which time frame the time series must be cut)
+    sub_timetask = subset(timetask_only10,timetask_only10$Soggetto== subid)
+    print(subid)
+    print('list of Trials for which cutting frames are present')
+    sub_timetask[,'trial']
+    print('list of good or bad trials')
+    print(Trial_info[Trial_info$new_subID==subid,])
+    
+    #intialize Trial2use for the new subjetc
+    Trial2use= c()
+    # output is Trial2use = which number of trial I have to take
+    trial_list = as.numeric(sub_timetask$trial)
+    # loop on the trial_list
+    for (h in trial_list ){
+        
+        col2check = paste('trial_',h,sep='')
+        print(col2check)
+        # if good or bad trial
+        if (Trial_info[Trial_info$new_subID==subid,col2check]== 'good'){
+            t = strsplit(col2check, "_")[[1]][2]
+            Trial2use=c(Trial2use,as.numeric(t))}
+        else if (Trial_info[Trial_info$new_subID==subid,col2check]== 'bad'){
+            print(paste(col2check, 'is a bad trial'))}
+    }
+    
+    print('trial availbale')
+    print(Trial2use)
+    print('trial used - the first 10 good trials')
+    trial2take = Trial2use[1:10]
+    print(trial2take)
+    
+    #select the first 10 good trial for the subject from the csv
+    t1 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[1],'.csv', sep=''))#[,1:12]
+    t2 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[2],'.csv', sep=''))#[,1:12]
+    t3 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[3],'.csv', sep=''))#[,1:12]
+    t4 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[4],'.csv', sep=''))#[,1:12]
+    t5 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[5],'.csv', sep=''))#[,1:12]
+    t6 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[6],'.csv', sep=''))#[,1:12]
+    t7 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[7],'.csv', sep=''))#[,1:12]
+    t8 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[8],'.csv', sep=''))#[,1:12]
+    t9 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[9],'.csv', sep=''))#[,1:12]
+    t10 = read_csv(paste(rawdatapath,'/',sub2use,'_trial_',trial2take[10],'.csv', sep=''))#[,1:12]
+    tlist= list(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10)
+    
+    # cut time series!!!
+    # looping on the 10 trials
+    for (k in 1:10){
+        timeseries2use = tlist[[k]]
+        frame_onset = as.numeric(sub_timetask[sub_timetask$trial== trial2take[k], 'Frame_Onset']) #starting frame
+        frame_end = as.numeric(sub_timetask[sub_timetask$trial== trial2take[k], 'FrameRilascio']) #ending frame
+        new_timeserie =  timeseries2use[frame_onset:frame_end,]
+        
+        # save new csv
+        # change the numeration of the trial (Alwasys put 0 in the front)
+        if (trial2take[k]<10){new_k = paste("0",trial2take[k],sep='')
+        }else if (trial2take[k]>=10){new_k = trial2take[k]}
+        new_name = file.path(cut_csv_path,paste(sub_timetask[1,1],'_trial_',new_k,'_cut.csv',sep=""))
+        write.csv(new_timeserie,new_name)
+    }
+}
+
+```

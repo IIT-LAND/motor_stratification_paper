@@ -1,0 +1,160 @@
+---
+title: "DTW results exploration"
+Date: 18.03.2021
+output:
+  html_document:
+    df_print: paged
+Author: Veronica Mandelli
+---
+
+this notebook is an exploration of DTW results for the entire reach-to-drop motor task
+
+### load libraries and set paths
+```{r, error= FALSE, warning= FALSE, include= FALSE, hide= TRUE}
+library(easypackages)
+library(fpc)
+require(tidyverse)
+library(rstatix)
+library(ggpubr)
+library(car)
+#load libraries
+libraries("ggplot2","dtw",'readr','reshape','ggridges','dplyr')
+
+# set paths
+dir = ""
+codepath = file.path(dir,"code")
+rawdatapath = file.path(dir,"data",'all_data_csv_cutted')
+datapath =  file.path(dir,'result',"all_data")
+plotpath = file.path(dir,'plot')
+resultpath  = file.path(dir,'result')
+
+# source functions
+functionpath= file.path(dir,'fuctions')
+source(file.path(functionpath,"cohens_d.R"))
+
+#load subject list
+sublist_def =read.csv(file.path(rawdatapath,'sublist_def.csv'))
+sublist_def = sublist_def[,c('subID','new_subID')]
+# outliers: thise that changed hands Dx Sx 
+outliers = c("1042",'1047','1088')
+
+# uncomment for TD
+
+# define colour
+color = c("#FF9933","#3399CC","#009900","#ff0000","#000000")
+```
+
+## load all subjects matrices and compute motor noise as median of the lower triangle
+```{r, error= FALSE, warning= FALSE}
+sublist = sublist_def$new_subID
+#delate the outliers
+sublist = sublist[!sublist %in% outliers]
+
+# initialize a matrix for the summary
+mat_all_subj = as.data.frame(matrix(nrow=length(sublist), ncol=4))
+colnames(mat_all_subj)= c('SUB_ID','mean','median','std')
+rownames(mat_all_subj)= sublist
+
+# inizialize a matrix for the ggridges plots (3 columns: number of trials comparison (should be a number: NO t1-t2 or t7-t5
+# but 1, 12 etc), subject id, DTW value)
+matrix2plot_allsubjects = as.data.frame(matrix(nrow= 0,ncol=3))
+colnames(matrix2plot_allsubjects)= c("x",'y',"height") 
+
+# load all data (all DTW 10X10 matrix) take the lower triangle and compute the mean, median and stanrad deviation
+for (k in c(1:length(sublist))){
+    # select the subjectt
+    sub2use = sublist[k]
+    data = read.csv(file.path(datapath,paste(sub2use,"_mat_norm.csv",sep= '')))
+    data= data[,2:11]
+    data_vec = c(data[lower.tri(data, diag = FALSE)])
+    matrix2plot = as.data.frame(matrix(nrow= 45,ncol=3))
+    colnames(matrix2plot)= c("x",'sub_id',"height") 
+    matrix2plot$height = data_vec
+    matrix2plot$sub_id=sub2use
+    matrix2plot$x= 1:45 # should be number!!!!! on the x axis
+    ggplot(matrix2plot, aes(x, ysub_id, height = height)) + geom_ridgeline()
+    matrix2plot_allsubjects = rbind(matrix2plot_allsubjects,matrix2plot)
+    
+    mat_all_subj[as.character(sub2use),'SUB_ID'] = sub2use
+    mat_all_subj[as.character(sub2use),'mean'] = mean(data[lower.tri(data, diag = FALSE)])
+    mat_all_subj[as.character(sub2use),'median'] = median(data[lower.tri(data, diag = FALSE)])
+    mat_all_subj[as.character(sub2use),'std'] = sd(data[lower.tri(data, diag = FALSE)])
+} 
+
+#write.csv(mat_all_subj,file.path(resultpath,'ASD_DTW_mean_median_std_nooutlier.csv'))
+```
+
+# info about the ABC cluster
+```{r}
+# load informations about the ABC clusters
+sub_info = read.csv("dataset_bp_ASD_TD_clusters.csv")
+
+# merge with the matrix2plot_allsubjects with the clusters information
+all_sub_clust= merge(matrix2plot_allsubjects,sub_info[,],by.x='sub_id',by.y="subject_id")
+
+# make the sub_id col a character 
+all_sub_clust$sub_id= as.character(all_sub_clust$sub_id)
+#write.csv(all_sub_clust,file.path(resultpath,'matrix4learning.csv') )
+
+# merge with ABC
+merged_df = merge(mat_all_subj,sub_info[,c('subject_id',"new_cluster","cluster_norms","sex","age","mabc2_manualdexterity_std", "mabc2_aimingcatching_std",  "mabc2_balance_std" ,"mabc2_total_std")], by.x= 'SUB_ID',by.y='subject_id')
+```
+
+# plot median (motor noise) for each cluster
+```{r}
+
+title = 'median'
+clust_use= 'new_cluster'
+color = c( "#72aeb6","#2f70a1","#f0be3d")
+pmedian = ggplot(data = data2use, aes_string(x = "new_cluster", y = 'median', color = "new_cluster"))+
+  geom_jitter(size=7) + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA, lwd=0.7,fatten=5)+
+  scale_colour_manual(values = color)+
+  guides(colour = FALSE)+
+  xlab("") + ylab("DWT norm dist")+
+  ylim(0.025,0.08)+
+  ggtitle('')+
+  theme(axis.text.x = element_text(face="bold", size=18),axis.text.y = element_text(face="bold", size=18)
+        ,plot.title = element_text(color="red", size=14, face="bold.italic"))
+
+
+print(pmedian)
+ggsave(file.path(plotpath,paste("DTW_median_", clust_use,".png",sep = '')), pmedian,width = 4,height = 4)
+```
+
+### statistsics show which model is the best to disentangle differecnes on motor noise
+```{r}
+# t-test requirments
+ggdensity(merged_df$median)
+
+# normality test
+# Compute Shapiro wilk test by goups --> 
+resp_normality = shapiro.test(merged_df$median)
+resp_normality
+
+# Equality of variance
+# Levene's test with one independent variable
+resp_levene = leveneTest(median ~ new_cluster, data = merged_df)
+resp_levene
+
+#  paramentric: t-test
+x = subset(merged_df, merged_df$"new_cluster" =="high")$"median"
+y = subset(merged_df, merged_df$"new_cluster" =="low")$"median"
+
+res_2 = t.test(x,y)
+print(res_2)
+
+# we also compute the cohens'd to estimate the effect size
+CohenD <- cohens_d(merged_df[merged_df$new_cluster=='high','median'],
+                 merged_df[merged_df$new_cluster=='low','median'], 
+                 SIGN=FALSE)
+
+CohenD
+
+saving= as.data.frame(matrix(nrow=1,ncol = 7))
+colnames(saving) = c("normality","levene","test_type","t","p","df","CohenD")
+saving[1,]=c(resp_normality$p.value,resp_levene$`Pr(>F)`[1],'ttest',res_2$statistic,res_2$p.value,res_2$parameter, CohenD)
+#write.csv(saving, file.path(resultpath,'DTW_median_all_movement.csv'))
+
+```
+
+

@@ -1,0 +1,219 @@
+---
+title: "DTW results exploration"
+Date: 18.03.2021
+output:
+  html_document:
+    df_print: paged
+Author: Veronica Mandelli
+---
+this notebook is an exploration of DTW results on the Reach-to-Drop Task divided into feedforward and feedback phase
+
+### load libraries and set paths
+```{r, error= FALSE, warning= FALSE, include= FALSE, hide= TRUE}
+#
+library(easypackages)
+libraries("here","ggplot2","dtw",'readr','reshape','ggridges','dplyr','gridExtra','ggpubr','fpc')
+dir = ""
+codepath = file.path(dir,"code")
+
+datapath =  file.path(dir,'result')
+resultpath = file.path(dir,'result')
+plotpath = file.path(dir,'plot')
+source(file.path(functionpath,"cohens_d.R"))
+
+#select color for the plots
+color = c( "#72aeb6","#2f70a1","#f0be3d")
+
+#load the matrix of DTW (outlier already removed)
+# TD
+all_subjmat_median = read.csv(file.path(datapath,'_all_subjects_mat_median_nooutlier_td_100323.csv'))
+
+# load mat of ASD
+ASD = read.csv("_all_subjects_mat_median_nooutlier_asd_260123.csv")
+#Cluster info
+sub_info = read.csv("dataset_bp_ASD_TD_clusters.csv")
+
+# merge with the matrix2plot_allsubjects with the clusters information
+all_sub_clust= merge(ASD,sub_info[,],by.x='SUB_ID',by.y="subject_id")
+
+# delate outliers (mix DX and SX)
+outliers = c("1042",'1047','1088')
+all_sub_clust=all_sub_clust[!all_sub_clust$SUB_ID %in% outliers,]
+
+all_sub_clust_2plot = all_sub_clust[,c("SUB_ID","dist_norm_beforeDP_1st","dist_norm_afterDP_1st", "dist_norm_REACH",          "dist_norm_DROP","new_cluster")]
+colnames(all_sub_clust_2plot)=c("SUB_ID","dist_norm_beforeDP_1st","dist_norm_afterDP_1st", "dist_norm_REACH",          "dist_norm_DROP","clust")
+data2use_2plot = all_subjmat_median[,c("SUB_ID","dist_norm_beforeDP_1st","dist_norm_afterDP_1st","dist_norm_REACH",      "dist_norm_DROP","clust")]
+df = rbind(data2use_2plot,all_sub_clust_2plot)
+df$clust = factor(df$clust, levels= c('TD','high','low'))
+```
+
+# plot of movement segmentation
+```{r}
+submovement_list = c("dist_norm_beforeDP_1st", "dist_norm_afterDP_1st","dist_norm_DROP")
+
+all_subjmat_median$clust = "TD"
+plt=list()
+i=0
+title_list = c('Reach FF','Reach FB', 'Drop')
+for(submovement in submovement_list){
+  i=i+1
+  p = ggplot(data = all_subjmat_median, aes_string(x = 'clust', y = submovement, color = 'clust'))+
+    geom_jitter(size=6) + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA, lwd=0.7,fatten=5)+
+    scale_colour_manual(values = color)+
+    scale_colour_manual(values = color)+
+    guides(colour = FALSE)+
+    xlab("") + ylab("DWT norm dist")+
+    ylim(0.025,0.10)+
+    ggtitle(title_list[i])+
+    theme(axis.text.x = element_text(face="bold", size=18),axis.text.y = element_text(face="bold", size=18)
+          ,plot.title = element_text(color="red", size=14, face="bold.italic"))
+  plt[[i]]=p
+  print(p)
+  #ggsave(file.path(plotpath,paste(submovement,median_mean,out_yes_no,'.pdf', sep='_')), p,width = 4,height = 6)
+}
+
+# merge all the plots in unique figure
+lay = rbind(c(1,2,3))
+L = grid.arrange(
+  plt[[1]],  plt[[2]],  plt[[3]], 
+  layout_matrix = lay
+)
+L
+
+#ggsave(file.path(plotpath,paste('segments_',median_mean,out_yes_no,'_260123.pdf',sep='')), L ,width = 8,height =6 )
+```
+
+
+### statistsics 
+
+
+# statistsics
+### anova
+```{r}
+require(tidyverse)
+library(rstatix)
+library(ggpubr)
+library(car)
+sub_list1 = c("TD","TD",'high')
+sub_list2 = c("high","low","low")
+col_list = c("dist_norm_beforeDP_1st", "dist_norm_afterDP_1st","dist_norm_DROP")
+
+# anova
+for (col in col_list){
+  form2use = as.formula(sprintf("%s ~ %s",
+                                  col, 'clust'))
+  print(form2use)
+  res.aov <- aov(form2use, data = df)
+  print(summary(res.aov))
+  tosave = as.data.frame(summary(res.aov)[[1]])
+  write.xlsx(tosave, file.path(resultpath,paste(col,'ANOVA_DTW_comparison_ASD_TD.xlsx',sep='')))
+}
+```
+### post hoc t-test
+```{r}
+
+for (col in col_list){
+    saving= as.data.frame(matrix(nrow=3,ncol = 5))
+    colnames(saving) = c("test_type","t","p","df","CohenD")
+    
+  for (i in 1:3){
+  sub1 = sub_list1[i]
+  sub2 = sub_list2[i]
+  sep_df = df[df$clust %in% c(sub1,sub2),]
+  
+# denisty plot
+ggdensity(sep_df[,col])
+
+#  paramentric: t-test
+x = subset(sep_df, sep_df$"clust" ==sub1)[,col]
+y = subset(sep_df, sep_df$"clust" ==sub2)[,col]
+
+res_2 = t.test(x,y)
+print(res_2)
+
+# we also compute the cohens'd to estimate the effect size
+CohenD <- cohens_d(sep_df[sep_df$clust==sub1,col],
+                 sep_df[sep_df$clust==sub2,col], 
+                 SIGN=FALSE)
+
+CohenD
+
+saving[i,]=c(res_2$statistic,res_2$p.value,res_2$parameter, CohenD)
+saving
+}
+  write.csv(saving, file.path(resultpath,paste(col,'_DTW_comparison_ASD_TD.csv',sep='')))
+  rownames(saving)=c("TD_high","TD_low","high_low")
+  write.xlsx(saving, file.path(resultpath,paste(col,'DTW_comparison_ASD_TD.xlsx',sep='')))
+}
+
+```
+
+### Linear Mixed Effect Models (LME)
+```{r}
+# lmer
+#prepare data
+data4lme = df[,c("SUB_ID","dist_norm_beforeDP_1st" ,"dist_norm_afterDP_1st","clust")]
+data4lme$clust= factor(data4lme$clus, levels= c('high','low','TD'))
+data4lme$SUB_ID= as.character(data4lme$SUB_ID)
+data4lme_melt =  melt(data4lme)
+
+# change row order
+data4lme_melt = data4lme_melt[order(data4lme_melt$SUB_ID),]
+rownames(data4lme_melt) <- NULL
+data4lme_melt$clust = factor(data4lme_melt$clust, levels = c('high','low',"TD"))
+
+# add colums for feedback/feedforward (phase)
+list = c('FF','FB')
+nsub = length(unique(data4lme_melt$SUB_ID))
+data4lme_melt$phase = rep(list, times=nsub)
+data4lme_melt$phase = factor(data4lme_melt$phase, levels = c('FF','FB'))
+
+# add column for order of segments
+list = c(1,2)
+nsub = length(unique(data4lme_melt$SUB_ID))
+data4lme_melt$order_seg = rep(list, times=nsub)
+
+# set colnames
+y_var='value'
+effect1 = "clust"
+effect2 = "phase" 
+effect3 = "order_seg"
+
+# lmer with interaction of cluster,phase and action (random effect of each subject's slope)
+form2use = as.formula(sprintf("%s ~ %s*%s  +  (1|SUB_ID)",
+                                  y_var, effect1,effect2))
+require(lmerTest)
+m_allgrps <- eval(substitute(lmer(formula = form2use, data = data4lme_melt)))
+summary(m_allgrps)
+#x_var ='order_seg'
+resp = anova(m_allgrps)
+mat2save = resp
+
+
+mat2save
+require(openxlsx)
+write.xlsx(mat2save, file.path(resultpath,'LME_ASD_TD.xlsx'))
+```
+
+### LME post hoc
+```{r}
+# loop on subtypes
+for (i in 1:3){
+  sub1 = sub_list1[i]
+  sub2 = sub_list2[i]
+  sep_df = data4lme_melt[data4lme_melt$clust %in% c(sub1,sub2),]
+  
+  #lmer with interaction of cluster,phase and action (random effect of each subject's slope)
+  form2use = as.formula(sprintf("%s ~ %s*%s  +  (1|SUB_ID)",
+                                    y_var, effect1,effect2))
+
+  m_allgrps <- eval(substitute(lmer(formula = form2use, data = sep_df)))
+  summary(m_allgrps)
+  #x_var ='order_seg'
+  resp = anova(m_allgrps)
+  mat2save = resp
+  
+  write.xlsx(mat2save, file.path(resultpath,paste(sub1,sub2,'LME_ASD_TD.xlsx',sep ="_")))
+
+}
+```
