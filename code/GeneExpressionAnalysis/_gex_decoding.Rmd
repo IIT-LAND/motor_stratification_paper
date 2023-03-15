@@ -1,0 +1,447 @@
+---
+title: "Gene Expression Decoding"
+output: html_document
+---
+
+# Gene expression decoding analysis
+
+```{r, warning=FALSE, message=FALSE}
+easypackages::libraries("here","ggplot2","rjson","knitr","forcats","tidyverse","patchwork","ggeasy")
+
+code_dir = here("code")
+result_dir = here("ns_gex_decode")
+asd_genelist_dir = here("genelists","autism")
+motor_genelist_dir = here("genelists","motor")
+# data_dir = here("data")
+
+source(file.path(code_dir,"ns_gene_decode.R"))
+source(file.path(code_dir,"genelistOverlap.R"))
+
+backgroundTotal = 16796 # 16906 #20787
+```
+
+Run the decoding in Neurosynth
+
+```{r, warning=FALSE, message=FALSE}
+RUN_DECODING = TRUE
+tissue_type = "full"
+fdr_thresh = 0.05
+
+result_dir = here("ns_gex_decode",tissue_type)
+
+if (RUN_DECODING){
+  # run gex decoding for each IC map of interest
+
+  img2use = "IC12"
+  nv_id = 794805
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+
+  img2use = "VMI"
+  nv_id = 794862
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+
+} # if (RUN_DECODING)
+```
+
+Run enrichment tests with gex decoded lists and autism-relevant gene lists
+
+```{r, warning=FALSE, message=FALSE}
+load(file.path(asd_genelist_dir,"genelists.Rda"))
+
+# read in updated sfari gene list
+sfari = read.csv(file.path(asd_genelist_dir,"SFARI-Gene_genes_01-23-2023release_03-09-2023export.csv"))
+sfari_genes = as.character(sfari$gene.symbol)
+
+# read in gandal 2022 DE genes as updated gandal_asd_down and gandal_asd_up
+gandal_asd_2022 = read.csv(file.path(asd_genelist_dir,"gandal_2022_nature_suppdata03.csv"))
+down_mask = (gandal_asd_2022$ASD_BA3_1_2_5_logFC<0 & gandal_asd_2022$ASD_BA3_1_2_5_FDR<=0.05) | (gandal_asd_2022$ASD_BA4_6_logFC<0 & gandal_asd_2022$ASD_BA4_6_FDR<=0.05) 
+gandal_asd_down = as.character(gandal_asd_2022$external_gene_name[down_mask])
+up_mask = (gandal_asd_2022$ASD_BA3_1_2_5_logFC>0 & gandal_asd_2022$ASD_BA3_1_2_5_FDR<=0.05) | (gandal_asd_2022$ASD_BA4_6_logFC>0 & gandal_asd_2022$ASD_BA4_6_FDR<=0.05) 
+gandal_asd_up = as.character(gandal_asd_2022$external_gene_name[up_mask])
+
+# read in gandal 2022 DE genes as updated gandal_asd_down and gandal_asd_up
+gandal_asd_2022 = read.csv(file.path(asd_genelist_dir,"gandal_2022_nature_suppdata05.csv"))
+down_mods = c("M14_cyan","M19_lightyellow","M3_brown","M5_green","M23_darkturquoise","M24_darkgrey","M25_orange")
+up_mods = c("M21_darkred","M8_pink","M2_blue","M27_white","M7_black","M15_midnightblue","M9_magenta","M12_tan","M32_darkmagenta","M34_plum1","M33_sienna3")
+down_mask = is.element(gandal_asd_2022$WGCNA_module,down_mods)
+up_mask = is.element(gandal_asd_2022$WGCNA_module,up_mods)
+asd_demods_down = as.character(gandal_asd_2022$external_gene_name[down_mask])
+asd_demods_up = as.character(gandal_asd_2022$external_gene_name[up_mask])
+
+
+motor_down_mods = c("M14_cyan","M19_lightyellow","M3_brown","M5_green","M24_darkgrey")
+motor_up_mods = c("M2_blue","M7_black","M15_midnightblue","M9_magenta","M12_tan","M32_darkmagenta","M34_plum1","M33_sienna3")
+down_mask = is.element(gandal_asd_2022$WGCNA_module,motor_down_mods)
+up_mask = is.element(gandal_asd_2022$WGCNA_module,motor_up_mods)
+asd_motor_demods_down = as.character(gandal_asd_2022$external_gene_name[down_mask])
+asd_motor_demods_up = as.character(gandal_asd_2022$external_gene_name[up_mask])
+
+
+img2use = "IC12"
+nv_id = 794805
+tissue_type = "full"
+IC12genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC12_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+
+
+img2use = "VMI"
+nv_id = 794862
+tissue_type = "full"
+VMIgenes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+VMI_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+
+
+geneclasses = list(satterstrom_102,sfari_genes,
+                   gandal_asd_down,
+                   gandal_asd_up,
+                   asd_motor_demods_down,
+                   asd_motor_demods_up,
+                   excitatory_de_genes,
+                   inhibitory_de_genes,
+                   microglia_de_genes,
+                   oligodendrocyte_de_genes,
+                   astrocyte_de_genes,
+                   endothelial_de_genes)
+
+geneclassnames = c("dnPTV","SFARI",
+                   "Motor DE Down Genes",
+                   "Motor DE Up Genes",
+                   "Motor Down Modules",
+                   "Motor Up Modules",
+                   "Excitatory",
+                   "Inhibitory",
+                   "Microglia",
+                   "Oligodendrocyte",
+                   "Astrocyte",
+                   "Endothelial")
+
+geneclassnames_abbrev = c("dnPTV","SFARI_ASD",
+                          "ASD_DE_Downreg_Gandal",
+                          "ASD_DE_Upreg_Gandal",
+                          "ASD_CTX_DownregMods",
+                          "ASD_CTX_UpregMods",
+                          "Excitatory_DE",
+                          "Inhibitory_DE",
+                          "Microglia_DE",
+                          "Oligodendrocyte_DE",
+                          "Astrocyte_DE",
+                          "Endothelial_DE")
+
+
+res_colnames =  c("IC12")
+
+ORmat = data.frame(matrix(nrow = length(geneclasses), 
+                          ncol = length(res_colnames)))
+logPmat = data.frame(matrix(nrow = length(geneclasses), 
+                            ncol = length(res_colnames)))
+Pmat = data.frame(matrix(nrow = length(geneclasses), 
+                         ncol = length(res_colnames)))
+FDRmat = data.frame(matrix(nrow = length(geneclasses), 
+                           ncol = length(res_colnames)))
+
+colnames(ORmat) = res_colnames
+colnames(logPmat) = res_colnames
+colnames(Pmat) = res_colnames
+colnames(FDRmat) = res_colnames
+rownames(ORmat) = geneclassnames
+rownames(logPmat) = geneclassnames
+rownames(Pmat) = geneclassnames
+rownames(FDRmat) = geneclassnames
+
+
+for (i in 1:length(geneclasses)){
+  # intersect with background list
+  genes2 = geneclasses[[i]]
+  genes2 = data.frame(genes2)
+
+  # IC12
+  overlap_res = genelistOverlap(data.frame(IC12genes),
+                                genes2,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+  ORmat[i,"IC12"] = overlap_res[[1]]$OR
+  logPmat[i,"IC12"] = -log10(overlap_res[[1]]$hypergeo_p)
+  Pmat[i,"IC12"] = overlap_res[[1]]$hypergeo_p
+  
+  print(geneclassnames[i])
+  print(sort(overlap_res[[1]]$overlapping_genes))
+} # for (i in 1:length(geneclasses)){
+
+# compute FDR
+for (i in 1:dim(Pmat)[2]){
+  FDRmat[,i] = p.adjust(Pmat[,i], method = "fdr")
+} # for (i in 1:dim(Pmat)[2]){
+
+
+df4plot = ORmat
+colnames(df4plot)[1] = "OR"
+df4plot$pval = Pmat$IC12
+df4plot$fdr = FDRmat$IC12
+df4plot$log10p = -log10(df4plot$pval)
+df4plot$genelist = rownames(df4plot)
+reorder2use = fct_reorder(df4plot$genelist, df4plot$OR)
+ic12_asd_df = df4plot[order(df4plot$OR), ]
+
+write.csv(df4plot, file = here("results","IC12_autism_enrichmentTable.csv"))
+df4plot
+
+
+fontSize = 12
+p1 = ggplot(data = df4plot, aes(x = fct_reorder(genelist, OR), y = OR, fill = log10p)) + 
+  geom_bar(stat = "identity", colour="black") + 
+  scale_fill_gradientn(colors = colorRampPalette(c('white','red'))(100),
+                       limits = c(0,20),oob = scales::squish) +
+  ylab("Odds Ratio") + xlab(" ") +
+  coord_flip() + ggtitle("IC12 Genes") + easy_center_title() + 
+  theme(
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize)
+    )
+ggsave(filename=here("plots","enrichmentPlot_IC12_asd.pdf"))
+p1
+
+
+
+
+```
+
+
+
+Run enrichment tests with gex decoded lists and motor-relevant gene lists
+
+```{r, warning=FALSE, message=FALSE}
+# read in motor gene lists
+motor_lists = c("delayed_ability_to_walk.csv",
+                "delayed_gross_motor_development.csv",
+                "hypotonia.csv",
+                "motor_delay.csv",
+                "poor_gross_motor_coordination.csv")
+
+motor_genes = character()
+for (motor_list in motor_lists){
+  tmp_df = read.csv(file.path(motor_genelist_dir,motor_list)) 
+  motor_genes = unique(c(motor_genes,unique(tmp_df$node)))
+}
+
+
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                              satterstrom_102,
+                              backgroundTotal,
+                              print_result = FALSE,
+                              header = FALSE)
+sig_dnptv_genes = sort(overlap_res[[1]]$overlapping_genes)
+
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                              motor_genes,
+                              backgroundTotal,
+                              print_result = TRUE,
+                              header = FALSE)
+
+
+# print out overlap between IC12 genes, SFARI genes, and Motor genes
+sig_motor_genes = sort(overlap_res[[1]]$overlapping_genes)
+
+mask1 = is.element(sfari$gene.symbol, IC12genes)
+mask2 = is.element(sfari$gene.symbol, motor_genes)
+
+sfari_IC12_motor = sfari %>% filter(mask1 & mask2)
+sfari_IC12_motor
+
+mask3 = is.element(sfari$gene.symbol, sig_dnptv_genes)
+sfari_dnptv_IC12_motor = sfari %>% filter(mask3 & mask2)
+sfari_dnptv_IC12_motor
+
+# print out IC12 table for the subset of SFARI, IC12, and Motor genes
+mask = is.element(IC12_data$symbol,sfari_IC12_motor$gene.symbol)
+IC12_subset = IC12_data %>% filter(mask)
+IC12_subset[order(-IC12_subset$var_explained), ]
+
+
+
+
+
+
+
+
+
+# analysis to look at how Motor genes are enriched in Autism-Associated genes
+geneclasses = list(satterstrom_102,sfari_genes,
+                   gandal_asd_down,
+                   gandal_asd_up,
+                   asd_motor_demods_down,
+                   asd_motor_demods_up,
+                   excitatory_de_genes,
+                   inhibitory_de_genes,
+                   microglia_de_genes,
+                   oligodendrocyte_de_genes,
+                   astrocyte_de_genes,
+                   endothelial_de_genes)
+
+geneclassnames = c("dnPTV","SFARI",
+                   "Motor DE Down Genes",
+                   "Motor DE Up Genes",
+                   "Motor Down Modules",
+                   "Motor Up Modules",
+                   "Excitatory",
+                   "Inhibitory",
+                   "Microglia",
+                   "Oligodendrocyte",
+                   "Astrocyte",
+                   "Endothelial")
+
+geneclassnames_abbrev = c("dnPTV","SFARI_ASD",
+                          "ASD_DE_Downreg_Gandal",
+                          "ASD_DE_Upreg_Gandal",
+                          "ASD_CTX_DownregMods",
+                          "ASD_CTX_UpregMods",
+                          "Excitatory_DE",
+                          "Inhibitory_DE",
+                          "Microglia_DE",
+                          "Oligodendrocyte_DE",
+                          "Astrocyte_DE",
+                          "Endothelial_DE")
+
+
+res_colnames =  c("Motor")
+
+ORmat = data.frame(matrix(nrow = length(geneclasses), 
+                          ncol = length(res_colnames)))
+logPmat = data.frame(matrix(nrow = length(geneclasses), 
+                            ncol = length(res_colnames)))
+Pmat = data.frame(matrix(nrow = length(geneclasses), 
+                         ncol = length(res_colnames)))
+FDRmat = data.frame(matrix(nrow = length(geneclasses), 
+                           ncol = length(res_colnames)))
+
+colnames(ORmat) = res_colnames
+colnames(logPmat) = res_colnames
+colnames(Pmat) = res_colnames
+colnames(FDRmat) = res_colnames
+rownames(ORmat) = geneclassnames
+rownames(logPmat) = geneclassnames
+rownames(Pmat) = geneclassnames
+rownames(FDRmat) = geneclassnames
+
+# backgroundTotal = 20787 # 16906 #20787
+
+for (i in 1:length(geneclasses)){
+  # intersect with background list
+  genes2 = geneclasses[[i]]
+  genes2 = data.frame(genes2)
+
+  # Motor genes
+  overlap_res = genelistOverlap(data.frame(motor_genes),
+                                genes2,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+  ORmat[i,"Motor"] = overlap_res[[1]]$OR
+  logPmat[i,"Motor"] = -log10(overlap_res[[1]]$hypergeo_p)
+  Pmat[i,"Motor"] = overlap_res[[1]]$hypergeo_p
+  
+  print(geneclassnames[i])
+  print(sort(overlap_res[[1]]$overlapping_genes))
+} # for (i in 1:length(geneclasses)){
+
+# compute FDR
+for (i in 1:dim(Pmat)[2]){
+  FDRmat[,i] = p.adjust(Pmat[,i], method = "fdr")
+} # for (i in 1:dim(Pmat)[2]){
+
+
+df4plot = ORmat
+colnames(df4plot)[1] = "OR"
+df4plot$pval = Pmat$Motor
+df4plot$fdr = FDRmat$Motor
+df4plot$log10p = -log10(df4plot$pval)
+df4plot$genelist = rownames(df4plot)
+df4plot$genelist = factor(df4plot$genelist, levels=rownames(ic12_asd_df))
+write.csv(df4plot, file = here("results","dev_motor_issues_autism_enrichmentTable.csv"))
+df4plot
+
+fontSize = 12
+p2 = ggplot(data = df4plot, aes(x = genelist, y = OR, fill = log10p)) + 
+  geom_bar(stat = "identity", colour="black") + 
+  scale_fill_gradientn(colors = colorRampPalette(c('white','red'))(100),
+                       limits = c(0,20),oob = scales::squish) +
+  ylab("Odds Ratio") + xlab(" ") +
+  coord_flip() + ggtitle("Motor Genes") + easy_center_title() + 
+  theme(
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize)
+    )
+ggsave(filename=here("plots","enrichmentPlot_motor_asd.pdf"))
+p2
+
+p_final = p1 + p2 + plot_layout(guides = "collect", widths = c(10,10))
+ggsave(filename = here("plots","enrichmentPlot.pdf"), plot = p_final,width = 10)
+p_final
+
+
+
+
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                                asd_motor_demods_down,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+genes2 = sort(overlap_res[[1]]$overlapping_genes)
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                                satterstrom_102,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                                sfari_genes,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                                excitatory_de_genes,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
+overlap_res = genelistOverlap(data.frame(IC12genes),
+                                inhibitory_de_genes,
+                                backgroundTotal,
+                                print_result = FALSE,
+                                header = FALSE)
+genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
+
+
+overlap_res = genelistOverlap(data.frame(genes2),
+                                motor_genes,
+                                backgroundTotal,
+                                print_result = TRUE,
+                                header = FALSE)
+overlap_res[[1]]$OR
+overlap_res[[1]]$hypergeo_p
+sort(overlap_res[[1]]$overlapping_genes)
+write(sort(overlap_res[[1]]$overlapping_genes), file = here("results","IC12_asd_AND_motor.csv"))
+
+mask = is.element(IC12_data$symbol, sort(overlap_res[[1]]$overlapping_genes))
+tmp_df = IC12_data %>% filter(mask)
+tmp_df
+write.csv(tmp_df, file = here("results","IC12_asd_AND_motor_gex_decode_table.csv"))
+
+```
