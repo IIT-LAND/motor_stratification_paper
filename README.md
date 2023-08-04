@@ -2,7 +2,7 @@
 
 In this repository you will find the pipeline to reproduce the anlysis of the "motor stratification paper" (change name when published)
 
-There are 2 folders:
+There are 3 folders:
 ### MotorStratificationModel
 to reproduce the stratification model implementation. It contatins 4 main scripts:
 - **00_data_exploration.Rmd**: 1st scipt to run to merge IRCCS MEDEA and NDA dataset, run some preliminary statistical analysis to test the different motor performance in Autism with respect to Typically Developing children and children with DCD
@@ -19,3 +19,8 @@ it contains script to do the kinematic analysis of the reach-to-drop motor task,
 - **C01_DTW_reach2drop_segmentation.Rmd**: this script runs the DTW for the feedforward and feedback phases separately
 - **D_DTW_results_exploration.Rmd**: this script runs visualization and statistics for the entire movement's motor noise
 - **D01_DTW_results_exploration_segmentation.Rmd**:this script runs visualization and statistics for feedforward and feedback phases' motor noise
+
+### GeneExpressionAnalysis
+it contains the code for running the gene expression analysis.
+- **_gex_decoding.Rmd**: this script runs the gene decoding analysis and produce visualizations.
+- **genelistOverlap.R**: the script calculates enrichment odds ratio and p-value from hypergeometric test to answer the question of whether genes from one list are enriched in genes from another list
