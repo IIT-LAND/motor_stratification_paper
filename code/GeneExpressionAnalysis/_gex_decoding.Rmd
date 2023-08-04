@@ -17,13 +17,13 @@ motor_genelist_dir = here("genelists","motor")
 source(file.path(code_dir,"ns_gene_decode.R"))
 source(file.path(code_dir,"genelistOverlap.R"))
 
-backgroundTotal = 16796 # 16906 #20787
+backgroundTotal = 16796 
 ```
 
 Run the decoding in Neurosynth
 
 ```{r, warning=FALSE, message=FALSE}
-RUN_DECODING = TRUE
+RUN_DECODING = FALSE
 tissue_type = "full"
 fdr_thresh = 0.05
 
@@ -31,17 +31,83 @@ result_dir = here("ns_gex_decode",tissue_type)
 
 if (RUN_DECODING){
   # run gex decoding for each IC map of interest
+  img2use = "IC01"
+  nv_id = 794795
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
 
+  img2use = "IC03"
+  nv_id = 794796
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
+  img2use = "IC06"
+  nv_id = 794799
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
+  img2use = "IC07"
+  nv_id = 794800
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
+  img2use = "IC09"
+  nv_id = 794802
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
+  img2use = "IC11"
+  nv_id = 794804
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
   img2use = "IC12"
   nv_id = 794805
+  tissue_type = "full"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
+  img2use = "IC14"
+  nv_id = 794807
+  tissue_type = "full"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = "full", fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
+  img2use = "IC17"
+  nv_id = 794810
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
   fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
   ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
 
-  img2use = "VMI"
-  nv_id = 794862
+  img2use = "IC19"
+  nv_id = 794812
+  tissue_type = "cortex"
+  result_dir = here("ns_gex_decode",tissue_type)
   fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
   ns_gene_decode(image = nv_id, tissue = tissue_type, fname2save = fname2save, fdr_thresh = fdr_thresh)
 
+  img2use = "IC20"
+  nv_id = 794813
+  tissue_type = "full"
+  result_dir = here("ns_gex_decode",tissue_type)
+  fname2save = file.path(result_dir,img2use,sprintf("%s_%s.csv",nv_id,tissue_type))
+  ns_gene_decode(image = nv_id, tissue = "full", fname2save = fname2save, fdr_thresh = fdr_thresh)
+  
 } # if (RUN_DECODING)
 ```
 
@@ -79,9 +145,64 @@ asd_motor_demods_down = as.character(gandal_asd_2022$external_gene_name[down_mas
 asd_motor_demods_up = as.character(gandal_asd_2022$external_gene_name[up_mask])
 
 
+
+
+img2use = "IC01"
+nv_id = 794795
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC01genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC01_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+img2use = "IC03"
+nv_id = 794796
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC03genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC03_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+img2use = "IC06"
+nv_id = 794799
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC06genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC06_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+img2use = "IC07"
+nv_id = 794800
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC07genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC07_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+
+img2use = "IC09"
+nv_id = 794802
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC09genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC09_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+
 img2use = "IC12"
 nv_id = 794805
 tissue_type = "full"
+result_dir = here("ns_gex_decode",tissue_type)
 IC12genes = as.character(read.csv(file.path(result_dir,
                                             img2use,
                                             sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
@@ -89,15 +210,47 @@ IC12genes = as.character(read.csv(file.path(result_dir,
 IC12_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
 
 
-
-img2use = "VMI"
-nv_id = 794862
+img2use = "IC14"
+nv_id = 794807
 tissue_type = "full"
-VMIgenes = as.character(read.csv(file.path(result_dir,
+result_dir = here("ns_gex_decode",tissue_type)
+IC14genes = as.character(read.csv(file.path(result_dir,
                                             img2use,
                                             sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
   
-VMI_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+IC14_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+img2use = "IC17"
+nv_id = 794810
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC17genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC17_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+img2use = "IC19"
+nv_id = 794812
+tissue_type = "cortex"
+result_dir = here("ns_gex_decode",tissue_type)
+IC19genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC19_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
+
+img2use = "IC20"
+nv_id = 794813
+tissue_type = "full"
+result_dir = here("ns_gex_decode",tissue_type)
+IC20genes = as.character(read.csv(file.path(result_dir,
+                                            img2use,
+                                            sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))$symbol)
+  
+IC20_data = read.csv(file.path(result_dir,img2use,sprintf("%d_%s_pos_t_fdr0.05.csv",nv_id,tissue_type)))
+
 
 
 
@@ -202,7 +355,7 @@ p1 = ggplot(data = df4plot, aes(x = fct_reorder(genelist, OR), y = OR, fill = lo
   geom_bar(stat = "identity", colour="black") + 
   scale_fill_gradientn(colors = colorRampPalette(c('white','red'))(100),
                        limits = c(0,20),oob = scales::squish) +
-  ylab("Odds Ratio") + xlab(" ") +
+  ylab("Odds Ratio") + xlab(" ") + ylim(0,5) + 
   coord_flip() + ggtitle("IC12 Genes") + easy_center_title() + 
   theme(
     axis.text.x = element_text(size=fontSize),
@@ -213,10 +366,6 @@ p1 = ggplot(data = df4plot, aes(x = fct_reorder(genelist, OR), y = OR, fill = lo
     )
 ggsave(filename=here("plots","enrichmentPlot_IC12_asd.pdf"))
 p1
-
-
-
-
 ```
 
 
@@ -237,7 +386,7 @@ for (motor_list in motor_lists){
   motor_genes = unique(c(motor_genes,unique(tmp_df$node)))
 }
 
-
+#IC12
 overlap_res = genelistOverlap(data.frame(IC12genes),
                               satterstrom_102,
                               backgroundTotal,
@@ -269,13 +418,6 @@ sfari_dnptv_IC12_motor
 mask = is.element(IC12_data$symbol,sfari_IC12_motor$gene.symbol)
 IC12_subset = IC12_data %>% filter(mask)
 IC12_subset[order(-IC12_subset$var_explained), ]
-
-
-
-
-
-
-
 
 
 # analysis to look at how Motor genes are enriched in Autism-Associated genes
@@ -336,8 +478,6 @@ rownames(logPmat) = geneclassnames
 rownames(Pmat) = geneclassnames
 rownames(FDRmat) = geneclassnames
 
-# backgroundTotal = 20787 # 16906 #20787
-
 for (i in 1:length(geneclasses)){
   # intersect with background list
   genes2 = geneclasses[[i]]
@@ -361,7 +501,6 @@ for (i in 1:length(geneclasses)){
 for (i in 1:dim(Pmat)[2]){
   FDRmat[,i] = p.adjust(Pmat[,i], method = "fdr")
 } # for (i in 1:dim(Pmat)[2]){
-
 
 df4plot = ORmat
 colnames(df4plot)[1] = "OR"
@@ -393,55 +532,87 @@ p2
 p_final = p1 + p2 + plot_layout(guides = "collect", widths = c(10,10))
 ggsave(filename = here("plots","enrichmentPlot.pdf"), plot = p_final,width = 10)
 p_final
+```
 
 
+# Test enrichment between Autism AND Motor with AHBA gene lists
 
+Find the subset of autism-associated and motor-relevant genes. Then test enrichment 
+with the IC12 motor circuit gene list. 
 
-overlap_res = genelistOverlap(data.frame(IC12genes),
-                                asd_motor_demods_down,
-                                backgroundTotal,
-                                print_result = FALSE,
-                                header = FALSE)
-genes2 = sort(overlap_res[[1]]$overlapping_genes)
-overlap_res = genelistOverlap(data.frame(IC12genes),
-                                satterstrom_102,
-                                backgroundTotal,
-                                print_result = FALSE,
-                                header = FALSE)
-genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
-overlap_res = genelistOverlap(data.frame(IC12genes),
-                                sfari_genes,
-                                backgroundTotal,
-                                print_result = FALSE,
-                                header = FALSE)
-genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
-overlap_res = genelistOverlap(data.frame(IC12genes),
-                                excitatory_de_genes,
-                                backgroundTotal,
-                                print_result = FALSE,
-                                header = FALSE)
-genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
-overlap_res = genelistOverlap(data.frame(IC12genes),
-                                inhibitory_de_genes,
-                                backgroundTotal,
-                                print_result = FALSE,
-                                header = FALSE)
-genes2 = sort(unique(c(genes2,sort(overlap_res[[1]]$overlapping_genes))))
+As a control analysis, grab all other genes from AHBA GEX decoding in cortical, 
+subcortical, and cerebellar networks, and then test the enrichment with 
+Autism AND Motor genes.
 
+If enrichment between Autism AND Motor genes is specific to IC12 motor circuit, 
+we should see enrichment there, but no enrichment with genes from all other cortical, 
+subcortical, and cerebellar networks.
 
-overlap_res = genelistOverlap(data.frame(genes2),
-                                motor_genes,
-                                backgroundTotal,
-                                print_result = TRUE,
-                                header = FALSE)
+```{r, warning=FALSE, message=FALSE}
+# intersect autism AND motor genes
+
+# collect all autism-associated genes into one big list
+autism_gene_pool = unique(c(satterstrom_102,sfari_genes,
+                   gandal_asd_down,
+                   gandal_asd_up,
+                   asd_motor_demods_down,
+                   asd_motor_demods_up,
+                   excitatory_de_genes,
+                   inhibitory_de_genes,
+                   microglia_de_genes,
+                   oligodendrocyte_de_genes,
+                   astrocyte_de_genes,
+                   endothelial_de_genes))
+
+# grab the overlapping Autism AND Motor genes here
+overlap_res = genelistOverlap(autism_gene_pool,
+                              motor_genes,
+                              backgroundTotal,
+                              print_result = FALSE,
+                              header = FALSE)
+autism_AND_motor_genes = sort(overlap_res[[1]]$overlapping_genes)
+
+# IC12
+overlap_res = genelistOverlap(IC12genes,
+                              autism_AND_motor_genes,
+                              backgroundTotal,
+                              print_result = TRUE,
+                              header = FALSE)
 overlap_res[[1]]$OR
 overlap_res[[1]]$hypergeo_p
 sort(overlap_res[[1]]$overlapping_genes)
-write(sort(overlap_res[[1]]$overlapping_genes), file = here("results","IC12_asd_AND_motor.csv"))
+write(sort(overlap_res[[1]]$overlapping_genes), file = here("results","IC12_AND__asd_AND_motor.csv"))
 
 mask = is.element(IC12_data$symbol, sort(overlap_res[[1]]$overlapping_genes))
 tmp_df = IC12_data %>% filter(mask)
 tmp_df
-write.csv(tmp_df, file = here("results","IC12_asd_AND_motor_gex_decode_table.csv"))
+write.csv(tmp_df, file = here("results","IC12_AND__asd_AND_motor_gex_decode_table.csv"))
+
+
+# other cortical and cerebellar networks
+
+# collect all genes significant in other non-motor cortical and subcortical networks into one big list
+other_genes = unique(c(IC01genes,
+                       IC03genes,
+                       IC06genes,
+                       IC07genes,
+                       IC09genes,
+                       IC14genes,
+                       IC17genes,
+                       IC19genes))
+
+# test enrichment with Autism AND Motor genes
+overlap_res = genelistOverlap(other_genes,
+                              autism_AND_motor_genes,
+                              backgroundTotal,
+                              print_result = TRUE,
+                              header = FALSE)
+
+# test of cerebellar genes (IC20) with autism AND motor genes
+overlap_res = genelistOverlap(IC20genes,
+                              autism_AND_motor_genes,
+                              backgroundTotal,
+                              print_result = TRUE,
+                              header = FALSE)
 
 ```
